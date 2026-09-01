@@ -6,8 +6,7 @@ import { routeAgentRequest } from "agents";
 import { resolveUserContextFromHeaders } from "@/middleware/ensure-user/resolve";
 import { ProjectRepository } from "@/server/features/projects/repositories/ProjectRepository";
 import { SamSessionRepository } from "@/server/features/sam/SamSessionRepository";
-import { runScheduledRankChecks } from "@/server/features/rank-tracking/services/scheduledRankChecks";
-import { reconcileStaleAudits } from "@/server/features/audit/services/auditReconciler";
+import { runCronTick } from "@/server/features/cron/runCronTick";
 import { getOrCreateOrganizationCustomer } from "@/server/billing/subscription";
 import { isHostedServerAuthMode } from "@/server/lib/runtime-env";
 import { getAuthMode, isHostedAuthMode } from "@/lib/auth-mode";
@@ -213,20 +212,9 @@ export default {
       return;
     }
 
-    // Watchdog first: reconcile audits stuck in "running" whose workflow died
-    // without reaching mark-failed (OOM/CPU kills, expired instances). Runs
-    // before the rank loop so a slow tick can't delay or starve it. Its
-    // failure is held until after the rank checks so it can't suppress them,
-    // then rethrown so the invocation still reports as failed.
-    let watchdogError: unknown;
-    try {
-      await withPgClient(() => reconcileStaleAudits());
-    } catch (err) {
-      watchdogError = err;
-      console.error("[cron] Stale-audit reconcile failed:", err);
-    }
-    // Scope a per-request Postgres client for the cron run (no-op in D1 mode).
-    await withPgClient(() => runScheduledRankChecks(env));
+    // Airspace fork: body extracted to runCronTick so the Docker self-host
+    // cron route runs the identical job set.
+    const { watchdogError } = await runCronTick(env);
     if (watchdogError) throw watchdogError;
   },
 };

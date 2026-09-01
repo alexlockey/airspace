@@ -253,10 +253,15 @@ export function DashboardPage({ projectId }: { projectId: string }) {
   // The server re-checks freshness, so a stray double-fire costs nothing.
   const refreshMutation = useMutation({
     mutationFn: () => refreshDashboardBacklinkSnapshot({ data: { projectId } }),
-    onSuccess: () =>
+    onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: ["dashboardOverview", projectId],
-      }),
+      });
+      // The recommendations card cites the same backlink evidence.
+      void queryClient.invalidateQueries({
+        queryKey: ["recommendations", projectId],
+      });
+    },
   });
   const refreshFiredRef = useRef(false);
   const needsSnapshot =

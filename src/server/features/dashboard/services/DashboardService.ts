@@ -35,7 +35,7 @@ export type DashboardActivation = {
   competitorClickedAt: string | null;
 };
 
-type DashboardRankSummary = {
+export type DashboardRankSummary = {
   trackedKeywords: number;
   improved: number;
   declined: number;

@@ -1,11 +1,19 @@
 import type {
   DashboardAuditSummary,
   DashboardBacklinkSummary,
+  DashboardRankSummary,
 } from "@/server/features/dashboard/services/DashboardService";
+import { isIssueNeutralForSiteType } from "@/shared/siteTypeRules";
+import type { SiteType } from "@/types/schemas/projects";
 
 // Airspace fork: rule-based recommended actions. Every recommendation is
 // derived from stored evidence and says why; the LLM layer lives in the OS
 // skills, not here, so this stays deterministic and free.
+
+// Tuning surface in one place so presets, copy and rules cannot drift apart.
+export const SPAM_LINK_MIN_BACKLINKS = 5000;
+export const SPAM_LINK_RATIO = 100;
+const MAX_RECOMMENDATIONS = 6;
 
 export type Recommendation = {
   // 1 = act now, 2 = review, 3 = setup/housekeeping
@@ -19,24 +27,16 @@ export type Recommendation = {
     | "opportunity";
   title: string;
   evidence: string;
-  // In-app destination, project-relative (e.g. "backlinks", "audit").
-  target: string | null;
+  // In-app destination, project-relative route segment (see the dashboard
+  // card's link switch). Null lands on the project dashboard.
+  target: "audit" | "backlinks" | "rank-tracking" | "search-performance" | null;
 };
 
-// Job boards: 404/broken-page churn is inventory lifecycle, not decay.
-const JOB_BOARD_NEUTRAL_ISSUE = /404|not.?found|broken.?(link|page)/i;
-
-type RankSummaryLike = {
-  trackedKeywords: number;
-  improved: number;
-  declined: number;
-  lastCheckedAt: string | null;
-} | null;
+export type PortfolioSeverity = "critical" | "warn" | "nodata" | "good";
 
 export function buildRecommendations(input: {
-  siteType: string;
-  domain: string | null;
-  rank: RankSummaryLike;
+  siteType: SiteType;
+  rank: DashboardRankSummary | null;
   audit: DashboardAuditSummary | null;
   backlinks: DashboardBacklinkSummary | null;
   gscConnected: boolean;
@@ -49,9 +49,7 @@ export function buildRecommendations(input: {
 }): Recommendation[] {
   const recs: Recommendation[] = [];
   const issues = (input.audit?.topIssues ?? []).filter(
-    (issue) =>
-      input.siteType !== "job_board" ||
-      !JOB_BOARD_NEUTRAL_ISSUE.test(issue.issueType),
+    (issue) => !isIssueNeutralForSiteType(issue.issueType, input.siteType),
   );
 
   for (const issue of issues) {
@@ -79,8 +77,8 @@ export function buildRecommendations(input: {
     b?.backlinks != null &&
     b.referringDomains != null &&
     b.referringDomains > 0 &&
-    b.backlinks > 5000 &&
-    b.backlinks / b.referringDomains > 100
+    b.backlinks > SPAM_LINK_MIN_BACKLINKS &&
+    b.backlinks / b.referringDomains > SPAM_LINK_RATIO
   ) {
     recs.push({
       priority: 1,
@@ -140,7 +138,7 @@ export function buildRecommendations(input: {
       category: "setup",
       title: "Connect Search Console",
       evidence: "Without GSC the dashboard runs on estimates only.",
-      target: "settings/integrations",
+      target: null,
     });
   }
   if (!input.rank || input.rank.trackedKeywords === 0) {
@@ -153,7 +151,23 @@ export function buildRecommendations(input: {
     });
   }
 
-  return recs.toSorted((a, z) => a.priority - z.priority).slice(0, 6);
+  return recs
+    .toSorted((a, z) => a.priority - z.priority)
+    .slice(0, MAX_RECOMMENDATIONS);
+}
+
+/** One severity per site, derived from the recommendations so chips, sort
+ * order and action lists can never disagree — computed server-side so digest
+ * jobs and MCP tools share the same answer as the UI. */
+export function severityFromRecommendations(
+  recommendations: Recommendation[],
+  hasAnyData: boolean,
+): PortfolioSeverity {
+  const top = recommendations[0];
+  if (top?.priority === 1) return "critical";
+  if (top?.priority === 2) return "warn";
+  if (!hasAnyData) return "nodata";
+  return "good";
 }
 
 function formatIssueType(issueType: string) {

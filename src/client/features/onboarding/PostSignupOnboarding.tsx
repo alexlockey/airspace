@@ -60,8 +60,8 @@ export function PostSignupOnboarding({
 
       <div className="text-center space-y-3">
         <img
-          src="/transparent-logo.png"
-          alt="OpenSEO"
+          src="/favicon.svg"
+          alt="Airspace"
           className="mx-auto size-10 rounded-lg"
         />
         <p className="text-xs font-medium uppercase tracking-wide text-base-content/50">
@@ -70,8 +70,8 @@ export function PostSignupOnboarding({
         <h1 className="text-xl font-semibold">
           {title ??
             (firstName
-              ? `Welcome to OpenSEO, ${firstName}!`
-              : "Welcome to OpenSEO!")}
+              ? `Welcome to Airspace, ${firstName}!`
+              : "Welcome to Airspace!")}
         </h1>
         <p className="text-sm text-base-content/60">
           {helperText ?? "A few quick answers to set things up."}

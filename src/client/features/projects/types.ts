@@ -1,3 +1,5 @@
+import type { SiteType } from "@/types/schemas/projects";
+
 // The project's default market: the country/language pair its data calls
 // fall back to. Mirrors resolveMarket's project argument in shared/.
 export type ProjectMarket = { locationCode: number; languageCode: string };
@@ -11,6 +13,6 @@ export type ProjectSummary = {
   locationCode: number;
   languageCode: string;
   // Airspace fork: audit-interpretation paradigm.
-  siteType: string;
+  siteType: SiteType;
   createdAt: string;
 };

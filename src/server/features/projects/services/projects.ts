@@ -7,6 +7,7 @@ import type {
   SetProjectSiteTypeInput,
   UpdateProjectInput,
 } from "@/types/schemas/projects";
+import { SITE_TYPES, type SiteType } from "@/types/schemas/projects";
 import { ProjectRepository } from "@/server/features/projects/repositories/ProjectRepository";
 import { normalizeBacklinksTarget } from "@/server/lib/dataforseoBacklinksTarget";
 import { AppError } from "@/server/lib/errors";
@@ -22,6 +23,9 @@ function mapProject(project: {
   siteType: string;
   createdAt: string;
 }) {
+  const siteType: SiteType =
+    SITE_TYPES.find((candidate) => candidate === project.siteType) ??
+    "standard";
   return {
     id: project.id,
     name: project.name,
@@ -30,9 +34,9 @@ function mapProject(project: {
     // fall back to these when a call omits locationCode/languageCode).
     locationCode: project.locationCode,
     languageCode: project.languageCode,
-    // Airspace fork: audit-interpretation paradigm (standard | job_board |
-    // directory).
-    siteType: project.siteType,
+    // Airspace fork: audit-interpretation paradigm, narrowed to the union so
+    // consumers exhaustively branch on it.
+    siteType,
     createdAt: project.createdAt,
   };
 }

@@ -65,6 +65,35 @@ mechanical: after `git merge upstream/main`, re-check each item below.
   DashboardPage below the checklist).
 - `BacklinkSnapshotRepository.listRecentForProject`.
 
+## v1.5: review-pass fixes (Fable 5.1 audit, 10 confirmed findings)
+
+- `src/shared/siteTypeRules.ts` - the site-type neutral-issue map keyed by the
+  REAL audit issue registry (the v1.3 regex matched 1 of 27 keys); both
+  services import it. `src/shared/brand.ts` - single brand identity, wired
+  into Sidebar/AppShell/MCP server; onboarding + OAuth-consent logos and the
+  MCP name/website/icon rebranded (tests updated).
+- Portfolio resilience: per-project isolation (one failed site = one error
+  card), GSC faults degrade with an errored state, severity computed
+  server-side from the recommendations, health only from completed audits
+  plus an unseen-issue-types penalty, resolveDateRange (3-day lag) replaces
+  the hand-rolled 2-day window, ref-domain deltas show gains AND losses,
+  snapshot history is domain-guarded.
+- Recommendations: orchestration moved into PortfolioService (server fn is
+  transport-only), striking-distance failures degrade instead of failing the
+  card, the card links each action to its target page and shows errors
+  instead of a false all-clear; cache invalidated on snapshot refresh and
+  site-type change.
+- `src/server/features/cron/runCronTick.ts` - scheduled body extracted;
+  server.ts and /api/selfhost-cron both call it; the route now uses
+  getEnvValueSync, constant-time secret comparison, and a distinct 503 for a
+  too-short secret.
+- Disavow: partial-coverage detection (file warning + PARTIAL filename +
+  amber badge when the filtered set exceeds loaded rows) and the house
+  downloadFile helper; backlinks reconciling line says when totals are
+  unfiltered.
+- siteType typed as the SiteType union end to end; DashboardRankSummary
+  exported and imported; tests added for buildRecommendations/severity.
+
 ## Deliberately NOT rebranded
 
 - `/ai` MCP setup page, help pages, plugin/skill directories, package name,

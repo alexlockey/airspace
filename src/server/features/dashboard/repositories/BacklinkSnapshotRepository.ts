@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { backlinkSnapshots } from "@/db/schema";
 
@@ -19,14 +19,24 @@ async function getLatestForProject(
 }
 
 // Airspace fork: recent history for portfolio sparklines, oldest first.
+// Domain-guarded like getBacklinkSummary's consumer: after a project changes
+// domain, the old domain's series must not render as the new one's history.
 async function listRecentForProject(
   projectId: string,
-  limit = 30,
+  options: { domain?: string | null; limit?: number } = {},
 ): Promise<BacklinkSnapshot[]> {
+  const { domain, limit = 30 } = options;
   const rows = await db
     .select()
     .from(backlinkSnapshots)
-    .where(eq(backlinkSnapshots.projectId, projectId))
+    .where(
+      domain
+        ? and(
+            eq(backlinkSnapshots.projectId, projectId),
+            eq(backlinkSnapshots.domain, domain),
+          )
+        : eq(backlinkSnapshots.projectId, projectId),
+    )
     .orderBy(desc(backlinkSnapshots.id))
     .limit(limit);
   return rows.toReversed();

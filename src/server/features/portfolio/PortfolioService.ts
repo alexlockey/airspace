@@ -7,11 +7,20 @@ import {
 } from "@/server/features/gsc/services/GscService";
 import { GscConnectionRepository } from "@/server/features/gsc/repositories/GscConnectionRepository";
 import {
+  buildStrikingDistanceRows,
   previousPeriod,
   sumSearchTotals,
 } from "@/server/features/gsc/searchPerformanceReport";
+import { resolveDateRange } from "@/server/features/gsc/searchAnalytics";
 import { ProjectService } from "@/server/features/projects/services/ProjectService";
-import { buildRecommendations } from "@/server/features/portfolio/RecommendationsService";
+import {
+  buildRecommendations,
+  severityFromRecommendations,
+  type Recommendation,
+  type PortfolioSeverity,
+} from "@/server/features/portfolio/RecommendationsService";
+import { isIssueNeutralForSiteType } from "@/shared/siteTypeRules";
+import { SITE_TYPES, type SiteType } from "@/types/schemas/projects";
 
 // Airspace fork: the cross-project portfolio, modelled on the Ahrefs
 // dashboard: per site, health + authority + link profile + tracked keyword
@@ -19,19 +28,36 @@ import { buildRecommendations } from "@/server/features/portfolio/Recommendation
 // Reads stored data plus free first-party GSC calls only; never triggers a
 // metered DataForSEO refresh.
 
-const GSC_WINDOW_DAYS = 28;
-const DAILY_ROW_LIMIT = 60;
+const DAILY_ROW_LIMIT = 200;
+// Health model, named so tuning is one edit and reviewable.
+const HEALTH_CRITICAL_BASE = 20;
+const HEALTH_CRITICAL_SHARE = 20;
+const HEALTH_WARNING_BASE = 6;
+const HEALTH_WARNING_SHARE = 8;
+const HEALTH_INFO_PENALTY = 1;
+// Unseen issue types beyond the summary's top 3 still cost something.
+const HEALTH_EXTRA_TYPE_PENALTY = 2;
+const HEALTH_FLOOR = 5;
 
-function isoDaysAgo(days: number) {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() - days);
-  return d.toISOString().slice(0, 10);
+function toSiteType(value: string): SiteType {
+  return SITE_TYPES.find((candidate) => candidate === value) ?? "standard";
 }
 
-async function getGscSummary(projectId: string) {
-  // GSC data lags ~2 days; end the window there so the last points are real.
-  const endDate = isoDaysAgo(2);
-  const startDate = isoDaysAgo(2 + GSC_WINDOW_DAYS - 1);
+type GscSummary =
+  | {
+      connected: true;
+      totals: ReturnType<typeof sumSearchTotals>;
+      prevTotals: ReturnType<typeof sumSearchTotals>;
+      daily: { date: string; clicks: number }[];
+    }
+  | { connected: false; errored?: boolean };
+
+async function getGscSummary(projectId: string): Promise<GscSummary> {
+  // Same window policy as the Search Performance page (resolveDateRange owns
+  // the GSC data-lag handling) so the two surfaces always reconcile.
+  const { startDate, endDate } = resolveDateRange({
+    dateRange: "last_28_days",
+  });
   const prev = previousPeriod(startDate, endDate);
   try {
     const [current, previous] = await Promise.all([
@@ -69,81 +95,181 @@ async function getGscSummary(projectId: string) {
     ) {
       return { connected: false as const };
     }
-    throw error;
+    // Rate limits and transient Google faults degrade one card, never the
+    // whole estate page.
+    console.error("portfolio: GSC summary failed", { projectId }, error);
+    return { connected: false as const, errored: true };
   }
 }
 
-/** v1 heuristic health score, deliberately simple and explainable: start at
- * 100, subtract per issue TYPE by severity, weighted by how much of the crawl
- * it touches. Site-type reinterpretation applies before scoring (job boards:
- * 404-class churn is inventory lifecycle). Null when no audit has run. */
-const JOB_BOARD_NEUTRAL_ISSUE = /404|not.?found|broken.?(link|page)/i;
-
+/** v1 heuristic health score, deliberately simple and explainable. Site-type
+ * reinterpretation applies before scoring. Null when no COMPLETED audit
+ * exists (a running crawl's partial counts would skew the share maths). */
 function healthScore(
   audit: Awaited<ReturnType<typeof DashboardService.getOverview>>["audit"],
-  siteType: string,
+  siteType: SiteType,
 ): number | null {
-  if (!audit || audit.pagesCrawled === 0) return null;
+  if (!audit || audit.status !== "completed" || audit.pagesCrawled === 0) {
+    return null;
+  }
   let score = 100;
   for (const issue of audit.topIssues) {
-    if (
-      siteType === "job_board" &&
-      JOB_BOARD_NEUTRAL_ISSUE.test(issue.issueType)
-    ) {
+    if (isIssueNeutralForSiteType(issue.issueType, siteType)) {
       continue;
     }
     const share = Math.min(1, issue.count / audit.pagesCrawled);
-    if (issue.severity === "critical") score -= 20 + 20 * share;
-    else if (issue.severity === "warning") score -= 6 + 8 * share;
-    else score -= 1;
+    if (issue.severity === "critical") {
+      score -= HEALTH_CRITICAL_BASE + HEALTH_CRITICAL_SHARE * share;
+    } else if (issue.severity === "warning") {
+      score -= HEALTH_WARNING_BASE + HEALTH_WARNING_SHARE * share;
+    } else {
+      score -= HEALTH_INFO_PENALTY;
+    }
   }
-  return Math.max(5, Math.round(score));
+  const unseenTypes = Math.max(
+    0,
+    audit.totalIssueTypes - audit.topIssues.length,
+  );
+  score -= unseenTypes * HEALTH_EXTRA_TYPE_PENALTY;
+  return Math.max(HEALTH_FLOOR, Math.round(score));
+}
+
+async function getPortfolioRow(project: {
+  id: string;
+  name: string;
+  domain: string | null;
+  siteType: string;
+}) {
+  const siteType = toSiteType(project.siteType);
+  const [overview, gscConnection, snapshots, gsc] = await Promise.all([
+    DashboardService.getOverview({
+      projectId: project.id,
+      domain: project.domain,
+    }),
+    GscConnectionRepository.getByProjectId(project.id),
+    BacklinkSnapshotRepository.listRecentForProject(project.id, {
+      domain: project.domain,
+    }),
+    getGscSummary(project.id),
+  ]);
+  const recommendations = buildRecommendations({
+    siteType,
+    rank: overview.rank,
+    audit: overview.audit,
+    backlinks: overview.backlinks,
+    gscConnected: gscConnection !== null,
+  });
+  const hasAnyData = Boolean(
+    overview.rank || overview.audit || overview.backlinks || gscConnection,
+  );
+  return {
+    project: {
+      id: project.id,
+      name: project.name,
+      domain: project.domain,
+      siteType,
+    },
+    rank: overview.rank,
+    audit: overview.audit,
+    backlinks: overview.backlinks,
+    health: healthScore(overview.audit, siteType),
+    severity: severityFromRecommendations(recommendations, hasAnyData),
+    gsc,
+    refdomainHistory: snapshots.map((snapshot) => ({
+      capturedAt: snapshot.capturedAt,
+      referringDomains: snapshot.referringDomains,
+    })),
+    recommendations,
+    loadError: false,
+  };
 }
 
 async function getPortfolio(organizationId: string) {
   const projects = await ProjectService.listProjectsEnsuringOne(organizationId);
   return Promise.all(
     projects.map(async (project) => {
-      const [overview, gscConnection, snapshots] = await Promise.all([
-        DashboardService.getOverview({
-          projectId: project.id,
-          domain: project.domain,
-        }),
-        GscConnectionRepository.getByProjectId(project.id),
-        BacklinkSnapshotRepository.listRecentForProject(project.id),
-      ]);
-      const gsc = gscConnection
-        ? await getGscSummary(project.id)
-        : { connected: false as const };
-      const recommendations = buildRecommendations({
-        siteType: project.siteType,
-        domain: project.domain,
-        rank: overview.rank,
-        audit: overview.audit,
-        backlinks: overview.backlinks,
-        gscConnected: gscConnection !== null,
-      });
-      return {
-        project: {
-          id: project.id,
-          name: project.name,
-          domain: project.domain,
-          siteType: project.siteType,
-        },
-        rank: overview.rank,
-        audit: overview.audit,
-        backlinks: overview.backlinks,
-        health: healthScore(overview.audit, project.siteType),
-        gscConnected: gscConnection !== null,
-        gsc,
-        refdomainHistory: snapshots.map((snapshot) => ({
-          capturedAt: snapshot.capturedAt,
-          referringDomains: snapshot.referringDomains,
-        })),
-        recommendations,
-      };
+      try {
+        return await getPortfolioRow(project);
+      } catch (error) {
+        // One broken project must degrade to one broken card, never a blank
+        // estate page.
+        console.error(
+          "portfolio: row failed",
+          { projectId: project.id },
+          error,
+        );
+        return {
+          project: {
+            id: project.id,
+            name: project.name,
+            domain: project.domain,
+            siteType: toSiteType(project.siteType),
+          },
+          rank: null,
+          audit: null,
+          backlinks: null,
+          health: null,
+          severity: "nodata" as PortfolioSeverity,
+          gsc: { connected: false as const, errored: true },
+          refdomainHistory: [],
+          recommendations: [] as Recommendation[],
+          loadError: true,
+        };
+      }
     }),
   );
 }
 
-export const PortfolioService = { getPortfolio };
+/** Recommended actions for one project, including GSC striking-distance
+ * opportunities. Owns all orchestration so the server function stays
+ * transport-only. */
+async function getProjectRecommendations(project: {
+  id: string;
+  domain: string | null;
+  siteType: string;
+}) {
+  const [overview, gscConnection] = await Promise.all([
+    DashboardService.getOverview({
+      projectId: project.id,
+      domain: project.domain,
+    }),
+    GscConnectionRepository.getByProjectId(project.id),
+  ]);
+  let strikingDistance:
+    | { query: string; page: string; position: number; impressions: number }[]
+    | undefined;
+  if (gscConnection) {
+    try {
+      const { startDate, endDate } = resolveDateRange({
+        dateRange: "last_28_days",
+      });
+      const queryPages = await GscService.getPerformance({
+        projectId: project.id,
+        startDate,
+        endDate,
+        dimensions: ["query", "page"],
+        filters: [],
+        rowLimit: 1000,
+      });
+      strikingDistance = buildStrikingDistanceRows(queryPages.rows, 3);
+    } catch (error) {
+      // Any GSC fault degrades to the non-GSC recommendations rather than
+      // failing the card into a false all-clear.
+      console.error(
+        "recommendations: striking distance failed",
+        { projectId: project.id },
+        error,
+      );
+    }
+  }
+  return buildRecommendations({
+    siteType: toSiteType(project.siteType),
+    rank: overview.rank,
+    audit: overview.audit,
+    backlinks: overview.backlinks,
+    gscConnected: gscConnection !== null,
+    strikingDistance,
+  });
+}
+
+export const PortfolioService = { getPortfolio, getProjectRecommendations };

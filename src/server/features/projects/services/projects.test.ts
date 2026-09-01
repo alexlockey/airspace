@@ -22,6 +22,7 @@ const defaultProject = {
   id: "project_default",
   name: "Default",
   domain: null,
+  siteType: "standard",
   createdAt: "2026-05-19 12:00:00",
 };
 
@@ -29,6 +30,7 @@ const namedProject = {
   id: "project_acme",
   name: "Acme",
   domain: "acme.com",
+  siteType: "standard",
   createdAt: "2026-05-20 12:00:00",
 };
 

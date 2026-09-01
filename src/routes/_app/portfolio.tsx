@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Radar } from "lucide-react";
@@ -9,19 +10,7 @@ export const Route = createFileRoute("/_app/portfolio")({
 });
 
 type PortfolioRow = Awaited<ReturnType<typeof getPortfolioOverview>>[number];
-type Severity = "critical" | "warn" | "nodata" | "good";
-
-// Severity derives from the recommendations engine so the chip, the card
-// order and the action list can never disagree with one another.
-function rowSeverity(row: PortfolioRow): Severity {
-  const top = row.recommendations[0];
-  if (top?.priority === 1) return "critical";
-  if (top?.priority === 2) return "warn";
-  if (!row.rank && !row.audit && !row.backlinks && !row.gscConnected) {
-    return "nodata";
-  }
-  return "good";
-}
+type Severity = PortfolioRow["severity"];
 
 const severityOrder: Record<Severity, number> = {
   critical: 0,
@@ -55,13 +44,11 @@ function Stat({
   label,
   value,
   delta,
-  deltaTone,
   valueClass,
 }: {
   label: string;
   value: string;
-  delta?: string | null;
-  deltaTone?: "good" | "bad";
+  delta?: ReactNode;
   valueClass?: string;
 }) {
   return (
@@ -73,31 +60,37 @@ function Stat({
         className={`truncate text-lg font-semibold tabular-nums ${valueClass ?? ""}`}
       >
         {value}
-        {delta ? (
-          <span
-            className={`ml-1 text-xs font-medium ${
-              deltaTone === "bad" ? "text-status-critical" : "text-status-good"
-            }`}
-          >
-            {delta}
-          </span>
-        ) : null}
+        {delta}
       </div>
     </div>
   );
 }
 
-function SiteCardStats({
-  row,
-  severity,
+function DeltaText({
+  tone,
+  children,
 }: {
-  row: PortfolioRow;
-  severity: Severity;
+  tone: "good" | "bad";
+  children: ReactNode;
 }) {
+  return (
+    <span
+      className={`ml-1 text-xs font-medium ${
+        tone === "bad" ? "text-status-critical" : "text-status-good"
+      }`}
+    >
+      {children}
+    </span>
+  );
+}
+
+function SiteCardStats({ row }: { row: PortfolioRow }) {
   const gsc = row.gsc.connected ? row.gsc : null;
   const clicksDelta = gsc
     ? pctDelta(gsc.totals.clicks, gsc.prevTotals.clicks)
     : null;
+  const newRefs = row.backlinks?.newReferringDomains ?? 0;
+  const lostRefs = row.backlinks?.lostReferringDomains ?? 0;
   return (
     <div className="mt-3 grid grid-cols-3 gap-x-3 gap-y-2 sm:grid-cols-6">
       <Stat
@@ -108,27 +101,33 @@ function SiteCardStats({
       <Stat
         label="Clicks 28d"
         value={gsc ? gsc.totals.clicks.toLocaleString() : "-"}
-        delta={clicksDelta}
-        deltaTone={clicksDelta?.startsWith("-") ? "bad" : "good"}
+        delta={
+          clicksDelta ? (
+            <DeltaText tone={clicksDelta.startsWith("-") ? "bad" : "good"}>
+              {clicksDelta}
+            </DeltaText>
+          ) : null
+        }
       />
       <Stat
         label="Rank"
         value={row.backlinks?.rank != null ? String(row.backlinks.rank) : "-"}
-        valueClass={
-          severity === "critical" ? "text-base-content/40" : undefined
-        }
       />
       <Stat
         label="Ref domains"
         value={row.backlinks?.referringDomains?.toLocaleString() ?? "-"}
         delta={
-          row.backlinks?.newReferringDomains
-            ? `+${row.backlinks.newReferringDomains}`
-            : row.backlinks?.lostReferringDomains
-              ? `-${row.backlinks.lostReferringDomains}`
-              : null
+          newRefs > 0 || lostRefs > 0 ? (
+            <>
+              {newRefs > 0 ? (
+                <DeltaText tone="good">+{newRefs}</DeltaText>
+              ) : null}
+              {lostRefs > 0 ? (
+                <DeltaText tone="bad">-{lostRefs}</DeltaText>
+              ) : null}
+            </>
+          ) : null
         }
-        deltaTone={row.backlinks?.newReferringDomains ? "good" : "bad"}
       />
       <Stat
         label="Backlinks"
@@ -138,27 +137,31 @@ function SiteCardStats({
         label="Tracked kw"
         value={row.rank ? String(row.rank.trackedKeywords) : "-"}
         delta={
-          row.rank && (row.rank.improved > 0 || row.rank.declined > 0)
-            ? `${row.rank.improved > 0 ? `▲${row.rank.improved}` : ""}${row.rank.declined > 0 ? ` ▼${row.rank.declined}` : ""}`.trim()
-            : null
-        }
-        deltaTone={
-          row.rank && row.rank.declined > row.rank.improved ? "bad" : "good"
+          row.rank && (row.rank.improved > 0 || row.rank.declined > 0) ? (
+            <>
+              {row.rank.improved > 0 ? (
+                <DeltaText tone="good">▲{row.rank.improved}</DeltaText>
+              ) : null}
+              {row.rank.declined > 0 ? (
+                <DeltaText tone="bad">▼{row.rank.declined}</DeltaText>
+              ) : null}
+            </>
+          ) : null
         }
       />
     </div>
   );
 }
 
-function SiteCard({
-  row,
-  severity,
-}: {
-  row: PortfolioRow;
-  severity: Severity;
-}) {
+function SiteCard({ row }: { row: PortfolioRow }) {
+  const severity = row.severity;
   const chip = severityChip[severity];
   const gsc = row.gsc.connected ? row.gsc : null;
+  const gscEmptyLabel = row.gsc.connected
+    ? "no data in range"
+    : row.gsc.errored
+      ? "GSC error, retrying next load"
+      : "GSC not connected";
   const topRec = row.recommendations[0] ?? null;
   const refSpark = row.refdomainHistory
     .map((point) => point.referringDomains)
@@ -197,68 +200,77 @@ function SiteCard({
         <span className={chip.className}>{chip.label}</span>
       </div>
 
-      <SiteCardStats row={row} severity={severity} />
+      {row.loadError ? (
+        <p className="mt-3 text-sm text-status-critical">
+          This site's data failed to load. Refresh to retry; the rest of the
+          estate is unaffected.
+        </p>
+      ) : (
+        <>
+          <SiteCardStats row={row} />
 
-      <div className="mt-3 flex items-end gap-4">
-        <div className="min-w-0 flex-1">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-base-content/40">
-            GSC clicks, daily 28d
-          </div>
-          {gsc && gsc.daily.length >= 2 ? (
-            <Sparkline
-              values={gsc.daily.map((point) => point.clicks)}
-              className="mt-1 h-9 w-full text-primary"
-            />
-          ) : (
-            <div className="mt-1 flex h-9 items-center text-xs text-base-content/30">
-              {row.gscConnected ? "no data in range" : "GSC not connected"}
+          <div className="mt-3 flex items-end gap-4">
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-base-content/40">
+                GSC clicks, daily 28d
+              </div>
+              {gsc && gsc.daily.length >= 2 ? (
+                <Sparkline
+                  values={gsc.daily.map((point) => point.clicks)}
+                  className="mt-1 h-9 w-full text-primary"
+                />
+              ) : (
+                <div className="mt-1 flex h-9 items-center text-xs text-base-content/30">
+                  {gscEmptyLabel}
+                </div>
+              )}
             </div>
-          )}
-        </div>
-        <div className="w-28 shrink-0">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-base-content/40">
-            Ref domains
-          </div>
-          {refSpark.length >= 2 ? (
-            <Sparkline
-              values={refSpark}
-              className="mt-1 h-9 w-full text-status-info"
-            />
-          ) : (
-            <div className="mt-1 flex h-9 items-center text-xs text-base-content/30">
-              history builds daily
+            <div className="w-28 shrink-0">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-base-content/40">
+                Ref domains
+              </div>
+              {refSpark.length >= 2 ? (
+                <Sparkline
+                  values={refSpark}
+                  className="mt-1 h-9 w-full text-status-info"
+                />
+              ) : (
+                <div className="mt-1 flex h-9 items-center text-xs text-base-content/30">
+                  history builds daily
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </div>
+          </div>
 
-      {topRec ? (
-        <Link
-          to="/p/$projectId"
-          params={{ projectId: row.project.id }}
-          className="mt-3 block rounded-md bg-base-200/60 px-3 py-2 text-xs hover:bg-base-200"
-          title={topRec.evidence}
-        >
-          <span
-            className={
-              topRec.priority === 1
-                ? "font-semibold text-status-critical"
-                : topRec.priority === 2
-                  ? "font-semibold text-status-warn"
-                  : "font-semibold text-base-content/60"
-            }
-          >
-            Next:
-          </span>{" "}
-          {topRec.title}
-          {row.recommendations.length > 1 ? (
-            <span className="text-base-content/40">
-              {" "}
-              · +{row.recommendations.length - 1} more
-            </span>
+          {topRec ? (
+            <Link
+              to="/p/$projectId"
+              params={{ projectId: row.project.id }}
+              className="mt-3 block rounded-md bg-base-200/60 px-3 py-2 text-xs hover:bg-base-200"
+              title={topRec.evidence}
+            >
+              <span
+                className={
+                  topRec.priority === 1
+                    ? "font-semibold text-status-critical"
+                    : topRec.priority === 2
+                      ? "font-semibold text-status-warn"
+                      : "font-semibold text-base-content/60"
+                }
+              >
+                Next:
+              </span>{" "}
+              {topRec.title}
+              {row.recommendations.length > 1 ? (
+                <span className="text-base-content/40">
+                  {" "}
+                  · +{row.recommendations.length - 1} more
+                </span>
+              ) : null}
+            </Link>
           ) : null}
-        </Link>
-      ) : null}
+        </>
+      )}
     </div>
   );
 }
@@ -269,9 +281,9 @@ function PortfolioPage() {
     queryFn: () => getPortfolioOverview(),
   });
 
-  const rows = (portfolioQuery.data ?? [])
-    .map((row) => ({ row, severity: rowSeverity(row) }))
-    .toSorted((a, z) => severityOrder[a.severity] - severityOrder[z.severity]);
+  const rows = (portfolioQuery.data ?? []).toSorted(
+    (a, z) => severityOrder[a.severity] - severityOrder[z.severity],
+  );
 
   return (
     <div className="h-full overflow-auto bg-base-100 px-4 py-8 pb-24 md:px-6 md:py-12 md:pb-8">
@@ -292,10 +304,17 @@ function PortfolioPage() {
           <div className="flex justify-center py-10">
             <span className="loading loading-spinner loading-md" />
           </div>
+        ) : portfolioQuery.isError ? (
+          <div className="alert alert-error">
+            <span>
+              The portfolio failed to load. Refresh to retry; if it persists,
+              check /api/health.
+            </span>
+          </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-            {rows.map(({ row, severity }) => (
-              <SiteCard key={row.project.id} row={row} severity={severity} />
+            {rows.map((row) => (
+              <SiteCard key={row.project.id} row={row} />
             ))}
           </div>
         )}

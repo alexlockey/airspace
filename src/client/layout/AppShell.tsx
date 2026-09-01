@@ -7,6 +7,7 @@ import {
   MobileSidebarDrawer,
   SeoApiStatusBanners,
 } from "@/client/layout/AppShellParts";
+import { BRAND } from "@/shared/brand";
 import { GscReEngagementModal } from "@/client/features/gsc/GscReEngagementModal";
 import { Sidebar } from "@/client/components/Sidebar";
 import { BILLING_ROUTE } from "@/shared/billing";
@@ -181,7 +182,7 @@ function MobileTopBar({
         <Menu className="h-5 w-5" />
       </button>
       <Link to="/" className="ml-1 font-semibold text-base-content">
-        Airspace
+        {BRAND.name}
       </Link>
     </div>
   );

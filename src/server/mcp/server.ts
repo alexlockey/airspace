@@ -9,6 +9,7 @@ import {
   type McpProps,
   type ToolContext,
 } from "@/server/mcp/context";
+import { BRAND } from "@/shared/brand";
 import { objectSchema } from "@/server/mcp/output-schemas";
 import { instrumentMcpToolHandler } from "@/server/mcp/instrumentation";
 import { getBacklinksOverviewTool } from "@/server/mcp/tools/get-backlinks-overview";
@@ -128,15 +129,15 @@ function registerOpenSeoTool<Input extends ToolSchema>(
 export function createOpenSeoMcpServer(authProps: McpProps) {
   const server = new McpServer(
     {
-      name: "OpenSEO MCP",
-      title: "OpenSEO",
+      name: BRAND.mcpName,
+      title: BRAND.name,
       version: "0.0.12",
       description:
         "SEO research tools for AI agents: keyword research and metrics, SERP and local SERP results, domain and backlink analysis, rank tracking, and Google Search Console performance.",
-      websiteUrl: "https://openseo.so",
+      websiteUrl: "https://airspace.alexlockey.com",
       icons: [
         {
-          src: "https://openseo.so/android-chrome-512x512.png",
+          src: "https://airspace.alexlockey.com/favicon.svg",
           mimeType: "image/png",
           sizes: ["512x512"],
         },

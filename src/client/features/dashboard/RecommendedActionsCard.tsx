@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { ListChecks } from "lucide-react";
@@ -16,8 +17,62 @@ const PRIORITY_LABEL: Record<number, string> = {
   3: "Setup",
 };
 
-// Recommendation targets map onto project routes; keep as plain segments and
-// build hrefs relative to the project root.
+type Rec = Awaited<ReturnType<typeof getProjectRecommendations>>[number];
+
+/** Each recommendation links to the page where it is acted on. TanStack Link
+ * needs literal routes, hence the switch. */
+function RecLink({
+  rec,
+  projectId,
+  children,
+  className,
+}: {
+  rec: Rec;
+  projectId: string;
+  children: ReactNode;
+  className: string;
+}) {
+  const props = { params: { projectId }, className, title: rec.evidence };
+  switch (rec.target) {
+    case "audit":
+      return (
+        <Link to="/p/$projectId/audit" {...props}>
+          {children}
+        </Link>
+      );
+    case "backlinks":
+      return (
+        <Link
+          to="/p/$projectId/backlinks"
+          search={{}}
+          params={{ projectId }}
+          className={className}
+          title={rec.evidence}
+        >
+          {children}
+        </Link>
+      );
+    case "rank-tracking":
+      return (
+        <Link to="/p/$projectId/rank-tracking" search={{}} {...props}>
+          {children}
+        </Link>
+      );
+    case "search-performance":
+      return (
+        <Link to="/p/$projectId/search-performance" {...props}>
+          {children}
+        </Link>
+      );
+    default:
+      return (
+        <Link to="/p/$projectId" {...props}>
+          {children}
+        </Link>
+      );
+  }
+}
+
 export function RecommendedActionsCard({ projectId }: { projectId: string }) {
   const recsQuery = useQuery({
     queryKey: ["recommendations", projectId],
@@ -35,6 +90,11 @@ export function RecommendedActionsCard({ projectId }: { projectId: string }) {
         <div className="flex justify-center py-6">
           <span className="loading loading-spinner loading-sm" />
         </div>
+      ) : recsQuery.isError ? (
+        <p className="mt-2 text-sm text-status-critical">
+          Recommendations failed to load. Refresh to retry; findings are NOT
+          clear until this loads.
+        </p>
       ) : recs.length === 0 ? (
         <p className="mt-2 text-sm text-base-content/50">
           Nothing needs attention. New findings appear here as audits, rank
@@ -44,11 +104,10 @@ export function RecommendedActionsCard({ projectId }: { projectId: string }) {
         <ul className="mt-3 space-y-2">
           {recs.map((rec) => (
             <li key={`${rec.category}-${rec.title}`}>
-              <Link
-                to={"/p/$projectId" as const}
-                params={{ projectId }}
+              <RecLink
+                rec={rec}
+                projectId={projectId}
                 className="flex items-start gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-base-200/60"
-                title={rec.evidence}
               >
                 <span
                   className={`${PRIORITY_CHIP[rec.priority]} mt-0.5 shrink-0`}
@@ -61,7 +120,7 @@ export function RecommendedActionsCard({ projectId }: { projectId: string }) {
                     {rec.evidence}
                   </span>
                 </span>
-              </Link>
+              </RecLink>
             </li>
           ))}
         </ul>

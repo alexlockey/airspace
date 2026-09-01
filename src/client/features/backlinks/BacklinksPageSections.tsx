@@ -146,6 +146,7 @@ export function BacklinksResultsCard({
             activeTab={activeTab}
             exportTarget={exportTarget}
             tabRows={tabRows}
+            totalRows={pagination.totalCount}
           />
           <BacklinksExportMenu
             activeTab={activeTab}
@@ -189,6 +190,7 @@ export function BacklinksResultsCard({
             {summary.backlinks.toLocaleString()} links from{" "}
             {summary.referringDomains.toLocaleString()} referring domains
             {view !== "all" ? " · showing one per domain" : ""}
+            {activeFilterCount > 0 ? " · totals are unfiltered" : ""}
           </span>
         ) : null}
         {activeTab === "backlinks" ? (

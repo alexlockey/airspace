@@ -155,6 +155,10 @@ function SiteTypeField({ project }: { project: ProjectSummary }) {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["projects"] });
       await queryClient.invalidateQueries({ queryKey: ["portfolio"] });
+      // The rubric change reshapes the recommendation list immediately.
+      await queryClient.invalidateQueries({
+        queryKey: ["recommendations", project.id],
+      });
       toast.success("Site type updated");
     },
     onError: (error) =>
