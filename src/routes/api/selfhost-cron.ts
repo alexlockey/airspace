@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { env } from "cloudflare:workers";
+import { z } from "zod";
 import { withPgClient } from "@/db";
 import { reconcileStaleAudits } from "@/server/features/audit/services/auditReconciler";
 import { runScheduledRankChecks } from "@/server/features/rank-tracking/services/scheduledRankChecks";
@@ -11,11 +12,13 @@ import { runScheduledRankChecks } from "@/server/features/rank-tracking/services
 // the same code path. Guarded by SELFHOST_CRON_SECRET; when the secret is
 // unset the route pretends not to exist.
 async function handleCronRequest(request: Request): Promise<Response> {
-  const secret = (env as unknown as Record<string, unknown>)
-    .SELFHOST_CRON_SECRET;
-  if (typeof secret !== "string" || secret.length < 16) {
+  const parsed = z
+    .object({ SELFHOST_CRON_SECRET: z.string().min(16) })
+    .safeParse(env);
+  if (!parsed.success) {
     return new Response("Not found", { status: 404 });
   }
+  const secret = parsed.data.SELFHOST_CRON_SECRET;
   const provided = request.headers.get("x-cron-secret");
   if (provided !== secret) {
     return new Response("Forbidden", { status: 403 });
