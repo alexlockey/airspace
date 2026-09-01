@@ -20,6 +20,17 @@ function rowSeverity(row: PortfolioRow): Severity {
   const lostRefs = backlinks?.lostReferringDomains ?? 0;
   const newRefs = backlinks?.newReferringDomains ?? 0;
   if (backlinks && lostRefs > newRefs && lostRefs > 0) return "critical";
+  // Spam-link pattern: a huge backlink count from very few referring domains
+  // is sitewide link spam (e.g. 40K links from 47 domains), not authority.
+  if (
+    backlinks?.backlinks != null &&
+    backlinks.referringDomains != null &&
+    backlinks.referringDomains > 0 &&
+    backlinks.backlinks > 5000 &&
+    backlinks.backlinks / backlinks.referringDomains > 100
+  ) {
+    return "critical";
+  }
   if ((rank?.declined ?? 0) > (rank?.improved ?? 0)) return "warn";
   if (audit?.topIssues.some((issue) => issue.severity === "warning")) {
     return "warn";
