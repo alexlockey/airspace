@@ -113,7 +113,12 @@ function PortfolioPage() {
                 <tr className="text-xs uppercase tracking-wide text-base-content/50">
                   <th>Site</th>
                   <th>Status</th>
-                  <th className="text-right">Authority</th>
+                  <th
+                    className="text-right"
+                    title="DataForSEO backlink rank, 0-100. Link-volume sensitive: spam links inflate it, so treat flagged rows' rank as noise."
+                  >
+                    Rank
+                  </th>
                   <th className="text-right">Ref domains</th>
                   <th className="text-right">Backlinks</th>
                   <th className="text-right">Tracked kw</th>
@@ -145,7 +150,20 @@ function PortfolioPage() {
                         <span className={chip.className}>{chip.label}</span>
                       </td>
                       <td className="text-right tabular-nums">
-                        {row.backlinks?.rank ?? "-"}
+                        <span
+                          className={
+                            severity === "critical"
+                              ? "text-base-content/40"
+                              : undefined
+                          }
+                          title={
+                            severity === "critical"
+                              ? "Rank inflated by the flagged link pattern; not trustworthy for this site"
+                              : undefined
+                          }
+                        >
+                          {row.backlinks?.rank ?? "-"}
+                        </span>
                       </td>
                       <td className="text-right tabular-nums">
                         {row.backlinks?.referringDomains?.toLocaleString() ??

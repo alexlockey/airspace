@@ -1,5 +1,14 @@
 import { useEffect, useMemo } from "react";
-import { SlidersHorizontal } from "lucide-react";
+import {
+  FileDown,
+  ShieldAlert,
+  ShieldCheck,
+  SlidersHorizontal,
+} from "lucide-react";
+import {
+  EMPTY_BACKLINKS_FILTERS,
+  EMPTY_REFERRING_DOMAINS_FILTERS,
+} from "./backlinksFilterTypes";
 import type { OnChangeFn, SortingState } from "@tanstack/react-table";
 import { BacklinksFilterPanel } from "./BacklinksFilterPanel";
 import { BacklinksTable } from "./BacklinksTable";
@@ -50,6 +59,7 @@ export function BacklinksResultsCard({
   isTabLoading,
   tabErrorMessage,
   exportTarget,
+  summary,
   pagination,
   onPageChange,
   onPageSizeChange,
@@ -68,6 +78,12 @@ export function BacklinksResultsCard({
   isTabLoading: boolean;
   tabErrorMessage: string | null;
   exportTarget: string;
+  /** Overview totals for the reconciling line: grouped views must say how
+   * many links sit behind the domain count, or trust in the numbers dies. */
+  summary?: {
+    backlinks: number | null;
+    referringDomains: number | null;
+  } | null;
   pagination: {
     page: number;
     pageSize: number;
@@ -133,6 +149,11 @@ export function BacklinksResultsCard({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <DisavowExportButton
+            activeTab={activeTab}
+            exportTarget={exportTarget}
+            tabRows={tabRows}
+          />
           <BacklinksExportMenu
             activeTab={activeTab}
             exportTarget={exportTarget}
@@ -163,6 +184,65 @@ export function BacklinksResultsCard({
             </span>
           ) : null}
         </button>
+        {activeTab !== "pages" ? (
+          <>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm gap-1.5"
+              title="One click: hide spam-scored, lost and broken links (spam score under 30)"
+              onClick={() => {
+                if (activeTab === "backlinks") {
+                  filters.backlinks.apply({
+                    ...EMPTY_BACKLINKS_FILTERS,
+                    maxSpamScore: "29",
+                    hideLost: "true",
+                    hideBroken: "true",
+                  });
+                } else {
+                  filters.domains.apply({
+                    ...EMPTY_REFERRING_DOMAINS_FILTERS,
+                    maxSpamScore: "29",
+                  });
+                }
+                onPageChange(1);
+              }}
+            >
+              <ShieldCheck className="size-3.5" />
+              Clean links
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm gap-1.5"
+              title="One click: show only links with spam score 40 and above, for disavow review"
+              onClick={() => {
+                if (activeTab === "backlinks") {
+                  filters.backlinks.apply({
+                    ...EMPTY_BACKLINKS_FILTERS,
+                    minSpamScore: "40",
+                  });
+                } else {
+                  filters.domains.apply({
+                    ...EMPTY_REFERRING_DOMAINS_FILTERS,
+                    minSpamScore: "40",
+                  });
+                }
+                onPageChange(1);
+              }}
+            >
+              <ShieldAlert className="size-3.5" />
+              Spam review
+            </button>
+          </>
+        ) : null}
+        {activeTab === "backlinks" &&
+        summary?.backlinks != null &&
+        summary?.referringDomains != null ? (
+          <span className="text-xs text-base-content/50">
+            {summary.backlinks.toLocaleString()} links from{" "}
+            {summary.referringDomains.toLocaleString()} referring domains
+            {view !== "all" ? " · showing one per domain" : ""}
+          </span>
+        ) : null}
         {activeTab === "backlinks" ? (
           <div
             role="tablist"
@@ -259,8 +339,98 @@ export function BacklinksResultsCard({
         isLoading={pagination.isFetching}
         onPageChange={onPageChange}
         onPageSizeChange={onPageSizeChange}
+        unitLabel={
+          activeTab === "backlinks"
+            ? view === "all"
+              ? "links"
+              : "referring domains"
+            : activeTab === "domains"
+              ? "referring domains"
+              : "pages"
+        }
       />
     </div>
+  );
+}
+
+const DISAVOW_SPAM_THRESHOLD = 40;
+const GOOGLE_DISAVOW_URL =
+  "https://search.google.com/search-console/disavow-links";
+
+/** Builds a Google-format disavow file from the CURRENTLY LOADED rows with
+ * spam score >= threshold. Deliberately never auto-submits: generating the
+ * file is safe, uploading it is a human decision (bad disavows hurt). */
+function DisavowExportButton({
+  activeTab,
+  exportTarget,
+  tabRows,
+}: {
+  activeTab: BacklinksSearchState["tab"];
+  exportTarget: string;
+  tabRows: BacklinksTabRows;
+}) {
+  if (activeTab === "pages") return null;
+  const domains = [
+    ...new Set(
+      activeTab === "domains"
+        ? tabRows.referringDomains
+            .filter(
+              (row) =>
+                row.domain !== null &&
+                (row.spamScore ?? 0) >= DISAVOW_SPAM_THRESHOLD,
+            )
+            .map((row) => row.domain as string)
+        : tabRows.backlinks
+            .filter(
+              (row) =>
+                row.domainFrom !== null &&
+                (row.spamScore ?? 0) >= DISAVOW_SPAM_THRESHOLD,
+            )
+            .map((row) => row.domainFrom as string),
+    ),
+  ].toSorted();
+
+  const download = () => {
+    const lines = [
+      `# Disavow file for ${exportTarget}`,
+      `# Generated by Airspace on ${new Date().toISOString().slice(0, 10)}`,
+      `# Domains from the currently loaded rows with spam score >= ${DISAVOW_SPAM_THRESHOLD}.`,
+      `# REVIEW EVERY LINE before uploading. Wrongly disavowing good links harms rankings.`,
+      `# Upload at: ${GOOGLE_DISAVOW_URL}`,
+      "",
+      ...domains.map((domain) => `domain:${domain}`),
+      "",
+    ].join("\n");
+    const blob = new Blob([lines], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `disavow-${exportTarget.replace(/[^a-z0-9.-]/gi, "_")}.txt`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    window.open(GOOGLE_DISAVOW_URL, "_blank", "noopener");
+  };
+
+  return (
+    <button
+      type="button"
+      className="btn btn-ghost btn-sm gap-1.5"
+      disabled={domains.length === 0}
+      title={
+        domains.length === 0
+          ? `No loaded rows with spam score >= ${DISAVOW_SPAM_THRESHOLD}. Run Spam review first, and page through if there are more rows.`
+          : `Download a disavow file for ${domains.length} spam-scored domains from the loaded rows, and open Google's disavow tool. Review before uploading.`
+      }
+      onClick={download}
+    >
+      <FileDown className="size-3.5" />
+      Disavow file
+      {domains.length > 0 ? (
+        <span className="badge badge-xs badge-error border-0 text-error-content">
+          {domains.length}
+        </span>
+      ) : null}
+    </button>
   );
 }
 

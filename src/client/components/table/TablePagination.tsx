@@ -9,20 +9,25 @@ type Props = {
   isLoading: boolean;
   onPageChange: (nextPage: number) => void;
   onPageSizeChange: (nextPageSize: number) => void;
+  /** Noun for the total, e.g. "referring domains". Grouped modes must not
+   * present a grouped total as if it counted something else. */
+  unitLabel?: string;
 };
 
 function formatRange(
   page: number,
   pageSize: number,
   totalCount: number | null,
+  unitLabel?: string,
 ) {
+  const unit = unitLabel ? ` ${unitLabel}` : "";
   const start = (page - 1) * pageSize + 1;
   if (totalCount == null) {
     return `${start.toLocaleString()}–${(start + pageSize - 1).toLocaleString()}`;
   }
-  if (totalCount === 0) return "0";
+  if (totalCount === 0) return `0${unit}`;
   const end = Math.min(totalCount, start + pageSize - 1);
-  return `${start.toLocaleString()}–${end.toLocaleString()} of ${totalCount.toLocaleString()}`;
+  return `${start.toLocaleString()}–${end.toLocaleString()} of ${totalCount.toLocaleString()}${unit}`;
 }
 
 export function TablePagination({
@@ -34,6 +39,7 @@ export function TablePagination({
   isLoading,
   onPageChange,
   onPageSizeChange,
+  unitLabel,
 }: Props) {
   const totalPages =
     totalCount != null ? Math.max(1, Math.ceil(totalCount / pageSize)) : null;
@@ -43,7 +49,7 @@ export function TablePagination({
   return (
     <div className="flex flex-col gap-3 border-t border-base-300 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-center gap-2 text-sm text-base-content/70 tabular-nums">
-        <span>{formatRange(page, pageSize, totalCount)}</span>
+        <span>{formatRange(page, pageSize, totalCount, unitLabel)}</span>
         {isLoading ? (
           <span className="loading loading-spinner loading-xs" />
         ) : null}

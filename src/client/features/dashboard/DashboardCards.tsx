@@ -245,7 +245,9 @@ export function BacklinkPulseCard({
         <Link
           to="/p/$projectId/backlinks"
           params={{ projectId }}
-          search={{ target: backlinks.domain, scope: "domain" }}
+          // Match the snapshot's own scope (subdomains) so the detail page's
+          // summary agrees with the card the user just clicked.
+          search={{ target: backlinks.domain, scope: "subdomains" }}
           className={moreDetailsClass}
         >
           More details

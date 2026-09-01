@@ -164,6 +164,10 @@ export function BacklinksBody({
         isTabLoading={tabLoading}
         tabErrorMessage={tabErrorMessage}
         exportTarget={overviewData.displayTarget || searchState.target}
+        summary={{
+          backlinks: overviewData.summary.backlinks ?? null,
+          referringDomains: overviewData.summary.referringDomains ?? null,
+        }}
         pagination={{
           page: searchState.page,
           pageSize: searchState.pageSize,

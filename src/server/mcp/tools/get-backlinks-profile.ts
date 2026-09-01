@@ -166,7 +166,11 @@ export const getBacklinksProfileTool = {
       `- page: ${backlinks.page}`,
       `- page size: ${backlinks.pageSize}`,
       `- rows returned: ${backlinks.rows.length}`,
-      `- total backlinks: ${formatMetric(backlinks.totalCount)}`,
+      // one_per_domain groups rows by referring domain, so its total counts
+      // domains, not individual links; mislabelling it caused real confusion.
+      (args.mode ?? "one_per_domain") === "as_is"
+        ? `- total backlinks: ${formatMetric(backlinks.totalCount)}`
+        : `- total referring domains (one_per_domain mode; not a backlink count): ${formatMetric(backlinks.totalCount)}`,
       `- has more: ${backlinks.hasMore ? "yes" : "no"}`,
       "",
       backlinks.rows.length === 0
