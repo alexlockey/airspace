@@ -87,6 +87,69 @@ function Stat({
   );
 }
 
+function SiteCardStats({
+  row,
+  severity,
+}: {
+  row: PortfolioRow;
+  severity: Severity;
+}) {
+  const gsc = row.gsc.connected ? row.gsc : null;
+  const clicksDelta = gsc
+    ? pctDelta(gsc.totals.clicks, gsc.prevTotals.clicks)
+    : null;
+  return (
+    <div className="mt-3 grid grid-cols-3 gap-x-3 gap-y-2 sm:grid-cols-6">
+      <Stat
+        label="Health"
+        value={row.health === null ? "-" : String(row.health)}
+        valueClass={healthClass(row.health)}
+      />
+      <Stat
+        label="Clicks 28d"
+        value={gsc ? gsc.totals.clicks.toLocaleString() : "-"}
+        delta={clicksDelta}
+        deltaTone={clicksDelta?.startsWith("-") ? "bad" : "good"}
+      />
+      <Stat
+        label="Rank"
+        value={row.backlinks?.rank != null ? String(row.backlinks.rank) : "-"}
+        valueClass={
+          severity === "critical" ? "text-base-content/40" : undefined
+        }
+      />
+      <Stat
+        label="Ref domains"
+        value={row.backlinks?.referringDomains?.toLocaleString() ?? "-"}
+        delta={
+          row.backlinks?.newReferringDomains
+            ? `+${row.backlinks.newReferringDomains}`
+            : row.backlinks?.lostReferringDomains
+              ? `-${row.backlinks.lostReferringDomains}`
+              : null
+        }
+        deltaTone={row.backlinks?.newReferringDomains ? "good" : "bad"}
+      />
+      <Stat
+        label="Backlinks"
+        value={row.backlinks?.backlinks?.toLocaleString() ?? "-"}
+      />
+      <Stat
+        label="Tracked kw"
+        value={row.rank ? String(row.rank.trackedKeywords) : "-"}
+        delta={
+          row.rank && (row.rank.improved > 0 || row.rank.declined > 0)
+            ? `${row.rank.improved > 0 ? `▲${row.rank.improved}` : ""}${row.rank.declined > 0 ? ` ▼${row.rank.declined}` : ""}`.trim()
+            : null
+        }
+        deltaTone={
+          row.rank && row.rank.declined > row.rank.improved ? "bad" : "good"
+        }
+      />
+    </div>
+  );
+}
+
 function SiteCard({
   row,
   severity,
@@ -96,9 +159,6 @@ function SiteCard({
 }) {
   const chip = severityChip[severity];
   const gsc = row.gsc.connected ? row.gsc : null;
-  const clicksDelta = gsc
-    ? pctDelta(gsc.totals.clicks, gsc.prevTotals.clicks)
-    : null;
   const topRec = row.recommendations[0] ?? null;
   const refSpark = row.refdomainHistory
     .map((point) => point.referringDomains)
@@ -137,54 +197,7 @@ function SiteCard({
         <span className={chip.className}>{chip.label}</span>
       </div>
 
-      <div className="mt-3 grid grid-cols-3 gap-x-3 gap-y-2 sm:grid-cols-6">
-        <Stat
-          label="Health"
-          value={row.health === null ? "-" : String(row.health)}
-          valueClass={healthClass(row.health)}
-        />
-        <Stat
-          label="Clicks 28d"
-          value={gsc ? gsc.totals.clicks.toLocaleString() : "-"}
-          delta={clicksDelta}
-          deltaTone={clicksDelta?.startsWith("-") ? "bad" : "good"}
-        />
-        <Stat
-          label="Rank"
-          value={row.backlinks?.rank != null ? String(row.backlinks.rank) : "-"}
-          valueClass={
-            severity === "critical" ? "text-base-content/40" : undefined
-          }
-        />
-        <Stat
-          label="Ref domains"
-          value={row.backlinks?.referringDomains?.toLocaleString() ?? "-"}
-          delta={
-            row.backlinks?.newReferringDomains
-              ? `+${row.backlinks.newReferringDomains}`
-              : row.backlinks?.lostReferringDomains
-                ? `-${row.backlinks.lostReferringDomains}`
-                : null
-          }
-          deltaTone={row.backlinks?.newReferringDomains ? "good" : "bad"}
-        />
-        <Stat
-          label="Backlinks"
-          value={row.backlinks?.backlinks?.toLocaleString() ?? "-"}
-        />
-        <Stat
-          label="Tracked kw"
-          value={row.rank ? String(row.rank.trackedKeywords) : "-"}
-          delta={
-            row.rank && (row.rank.improved > 0 || row.rank.declined > 0)
-              ? `${row.rank.improved > 0 ? `▲${row.rank.improved}` : ""}${row.rank.declined > 0 ? ` ▼${row.rank.declined}` : ""}`.trim()
-              : null
-          }
-          deltaTone={
-            row.rank && row.rank.declined > row.rank.improved ? "bad" : "good"
-          }
-        />
-      </div>
+      <SiteCardStats row={row} severity={severity} />
 
       <div className="mt-3 flex items-end gap-4">
         <div className="min-w-0 flex-1">
