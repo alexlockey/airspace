@@ -1,0 +1,1 @@
+ALTER TABLE "projects" ADD COLUMN "site_type" text DEFAULT 'standard' NOT NULL;

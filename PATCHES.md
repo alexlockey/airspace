@@ -41,6 +41,16 @@ mechanical: after `git merge upstream/main`, re-check each item below.
 | `src/client/features/dashboard/DashboardCards.tsx` | More details link scope matches the snapshot (subdomains).
 | `src/server/mcp/tools/get-backlinks-profile.ts` | grouped totals labelled as referring domains.                                                                                                                                                |
 
+## v1.3: site-type paradigm
+
+- `projects.site_type` column (standard | job_board | directory), both
+  dialects, migrations drizzle/0043 + drizzle-pg/0021.
+- `setProjectSiteType` server fn/service/repository; Site type select in
+  project General settings.
+- Portfolio: type badge; job_board rows reinterpret 404/broken-page audit
+  issue types as neutral (inventory churn), per the Chukovski rubric in the
+  OS repo (projects/seo-geo-platform/research/).
+
 ## Deliberately NOT rebranded
 
 - `/ai` MCP setup page, help pages, plugin/skill directories, package name,

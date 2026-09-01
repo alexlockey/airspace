@@ -12,8 +12,24 @@ type Severity = "critical" | "warn" | "nodata" | "good";
 
 // One severity per site so the table can sort worst-first and the row tint
 // reads at a glance: red = act, amber = review, grey = not set up, green = ok.
+// Job boards live under a different rubric (Chukovski): 404/broken-page
+// churn is inventory lifecycle, not decay, so those audit issue types are
+// neutral there instead of severity drivers.
+const JOB_BOARD_NEUTRAL_ISSUE = /404|not.?found|broken.?(link|page)/i;
+
+function effectiveIssues(row: PortfolioRow) {
+  const issues = row.audit?.topIssues ?? [];
+  if (row.project.siteType !== "job_board") return issues;
+  return issues.filter(
+    (issue) => !JOB_BOARD_NEUTRAL_ISSUE.test(issue.issueType),
+  );
+}
+
 function rowSeverity(row: PortfolioRow): Severity {
-  const { rank, audit, backlinks } = row;
+  const { rank, backlinks } = row;
+  const audit = row.audit
+    ? { ...row.audit, topIssues: effectiveIssues(row) }
+    : null;
   if (audit?.topIssues.some((issue) => issue.severity === "critical")) {
     return "critical";
   }
@@ -129,7 +145,7 @@ function PortfolioPage() {
               <tbody>
                 {rows.map(({ row, severity }) => {
                   const chip = severityChip[severity];
-                  const topIssue = row.audit?.topIssues[0] ?? null;
+                  const topIssue = effectiveIssues(row)[0] ?? null;
                   return (
                     <tr key={row.project.id} className={rowTint[severity]}>
                       <td>
@@ -138,8 +154,15 @@ function PortfolioPage() {
                           params={{ projectId: row.project.id }}
                           className="flex min-w-0 flex-col hover:underline"
                         >
-                          <span className="truncate font-medium">
+                          <span className="flex items-center gap-1.5 truncate font-medium">
                             {row.project.name}
+                            {row.project.siteType !== "standard" ? (
+                              <span className="status-chip status-chip-info">
+                                {row.project.siteType === "job_board"
+                                  ? "Job board"
+                                  : "Directory"}
+                              </span>
+                            ) : null}
                           </span>
                           <span className="truncate text-xs text-base-content/50">
                             {row.project.domain ?? "No domain set"}

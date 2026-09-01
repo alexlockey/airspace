@@ -8,6 +8,7 @@ import {
   restoreProject,
   setProjectDomain,
   setProjectMarket,
+  setProjectSiteType,
   updateProject,
 } from "@/server/features/projects/services/projects";
 
@@ -18,6 +19,7 @@ export const ProjectService = {
   updateProject,
   setProjectDomain,
   setProjectMarket,
+  setProjectSiteType,
   archiveProject,
   restoreProject,
   listArchivedProjects,

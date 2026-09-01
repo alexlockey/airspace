@@ -153,6 +153,31 @@ async function updateProjectMarket(
   return row;
 }
 
+// Airspace fork: writes only the site_type column.
+async function updateProjectSiteType(
+  projectId: string,
+  organizationId: string,
+  siteType: string,
+) {
+  const [row] = await db
+    .update(projects)
+    .set({ siteType })
+    .where(
+      and(
+        eq(projects.id, projectId),
+        eq(projects.organizationId, organizationId),
+        isNull(projects.archivedAt),
+      ),
+    )
+    .returning();
+
+  if (!row) {
+    throw new AppError("NOT_FOUND");
+  }
+
+  return row;
+}
+
 async function tryCreateDefaultProject(organizationId: string) {
   const id = crypto.randomUUID();
   const inserted = await db
@@ -224,6 +249,7 @@ export const ProjectRepository = {
   updateProject,
   updateProjectDomain,
   updateProjectMarket,
+  updateProjectSiteType,
   tryCreateDefaultProject,
   archiveProject,
   restoreProject,

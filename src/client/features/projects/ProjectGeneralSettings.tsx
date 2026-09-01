@@ -11,8 +11,10 @@ import {
 import {
   archiveProject,
   getProjects,
+  setProjectSiteType,
   updateProject,
 } from "@/serverFunctions/projects";
+import { SITE_TYPES, type SiteType } from "@/types/schemas/projects";
 import type { ProjectSummary } from "./types";
 
 export function ProjectGeneralSettings({ projectId }: { projectId: string }) {
@@ -130,7 +132,59 @@ function GeneralSection({ project }: { project: ProjectSummary }) {
           </button>
         </div>
       </form>
+
+      <SiteTypeField project={project} />
     </section>
+  );
+}
+
+const SITE_TYPE_LABELS: Record<SiteType, string> = {
+  standard: "Standard website",
+  job_board: "Job board",
+  directory: "Directory / marketplace",
+};
+
+// Airspace fork: saves on change (separate column write, like the market-only
+// update). Job boards and directories are audited under a different rubric:
+// high URL churn is inventory lifecycle there, not decay.
+function SiteTypeField({ project }: { project: ProjectSummary }) {
+  const queryClient = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: (siteType: SiteType) =>
+      setProjectSiteType({ data: { projectId: project.id, siteType } }),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["projects"] });
+      await queryClient.invalidateQueries({ queryKey: ["portfolio"] });
+      toast.success("Site type updated");
+    },
+    onError: (error) =>
+      toast.error(getStandardErrorMessage(error, "Failed to update site type")),
+  });
+
+  return (
+    <label className="flex flex-col gap-1.5 text-sm">
+      <span className="font-medium">Site type</span>
+      <select
+        className="select select-bordered w-full"
+        value={project.siteType}
+        disabled={mutation.isPending}
+        onChange={(event) => {
+          const next = SITE_TYPES.find((v) => v === event.target.value);
+          if (next) mutation.mutate(next);
+        }}
+      >
+        {SITE_TYPES.map((value) => (
+          <option key={value} value={value}>
+            {SITE_TYPE_LABELS[value]}
+          </option>
+        ))}
+      </select>
+      <span className="text-xs text-base-content/50">
+        Job boards and directories are audited under a different rubric: high
+        URL churn and duplicate inventory are normal there, so those checks are
+        reinterpreted instead of flagged.
+      </span>
+    </label>
   );
 }
 

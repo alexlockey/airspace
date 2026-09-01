@@ -68,6 +68,8 @@ export const projects = pgTable(
     // onboarding and reused by every project-scoped data call.
     locationCode: integer("location_code").notNull().default(2840),
     languageCode: text("language_code").notNull().default("en"),
+    // Airspace fork: see the D1 schema comment. Parity-tested.
+    siteType: text("site_type").notNull().default("standard"),
     createdAt: timestampColumn("created_at").notNull().default(isoNow),
     // Soft delete: archived projects are hidden everywhere but their data
     // (keywords, rank tracking, audits) is preserved.

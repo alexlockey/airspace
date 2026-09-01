@@ -28,6 +28,7 @@ export const getPortfolioOverview = createServerFn({ method: "POST" })
             id: project.id,
             name: project.name,
             domain: project.domain,
+            siteType: project.siteType,
           },
           rank: overview.rank,
           audit: overview.audit,

@@ -10,5 +10,7 @@ export type ProjectSummary = {
   // Default market for the project's data calls.
   locationCode: number;
   languageCode: string;
+  // Airspace fork: audit-interpretation paradigm.
+  siteType: string;
   createdAt: string;
 };

@@ -4,6 +4,7 @@ import type {
   RestoreProjectInput,
   SetProjectDomainInput,
   SetProjectMarketInput,
+  SetProjectSiteTypeInput,
   UpdateProjectInput,
 } from "@/types/schemas/projects";
 import { ProjectRepository } from "@/server/features/projects/repositories/ProjectRepository";
@@ -18,6 +19,7 @@ function mapProject(project: {
   domain: string | null;
   locationCode: number;
   languageCode: string;
+  siteType: string;
   createdAt: string;
 }) {
   return {
@@ -28,6 +30,9 @@ function mapProject(project: {
     // fall back to these when a call omits locationCode/languageCode).
     locationCode: project.locationCode,
     languageCode: project.languageCode,
+    // Airspace fork: audit-interpretation paradigm (standard | job_board |
+    // directory).
+    siteType: project.siteType,
     createdAt: project.createdAt,
   };
 }
@@ -181,6 +186,19 @@ export async function setProjectMarket(
     input.projectId,
     organizationId,
     { locationCode: input.locationCode, languageCode: input.languageCode },
+  );
+  return mapProject(row);
+}
+
+// Airspace fork: writes only the site_type column.
+export async function setProjectSiteType(
+  organizationId: string,
+  input: SetProjectSiteTypeInput,
+) {
+  const row = await ProjectRepository.updateProjectSiteType(
+    input.projectId,
+    organizationId,
+    input.siteType,
   );
   return mapProject(row);
 }
