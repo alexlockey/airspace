@@ -51,6 +51,20 @@ mechanical: after `git merge upstream/main`, re-check each item below.
   issue types as neutral (inventory churn), per the Chukovski rubric in the
   OS repo (projects/seo-geo-platform/research/).
 
+## v1.4: Portfolio 2.0 + recommendations
+
+- `src/server/features/portfolio/{PortfolioService,RecommendationsService}.ts`
+  - health score (typed, explainable heuristic), free GSC daily series +
+  prev-period totals, refdomain history, rule-based evidence-cited
+  recommendations (site-type aware).
+- `src/serverFunctions/portfolio.ts` - portfolio fn + getProjectRecommendations
+  (adds GSC striking-distance opportunities).
+- `src/routes/_app/portfolio.tsx` - Ahrefs-style site cards with sparklines.
+- `src/client/components/Sparkline.tsx`, 
+  `src/client/features/dashboard/RecommendedActionsCard.tsx` (wired into
+  DashboardPage below the checklist).
+- `BacklinkSnapshotRepository.listRecentForProject`.
+
 ## Deliberately NOT rebranded
 
 - `/ai` MCP setup page, help pages, plugin/skill directories, package name,
