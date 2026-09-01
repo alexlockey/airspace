@@ -18,6 +18,20 @@ async function getLatestForProject(
   return rows[0] ?? null;
 }
 
+// Airspace fork: recent history for portfolio sparklines, oldest first.
+async function listRecentForProject(
+  projectId: string,
+  limit = 30,
+): Promise<BacklinkSnapshot[]> {
+  const rows = await db
+    .select()
+    .from(backlinkSnapshots)
+    .where(eq(backlinkSnapshots.projectId, projectId))
+    .orderBy(desc(backlinkSnapshots.id))
+    .limit(limit);
+  return rows.toReversed();
+}
+
 async function insert(
   values: typeof backlinkSnapshots.$inferInsert,
 ): Promise<BacklinkSnapshot> {
@@ -30,5 +44,6 @@ async function insert(
 
 export const BacklinkSnapshotRepository = {
   getLatestForProject,
+  listRecentForProject,
   insert,
 };

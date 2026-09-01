@@ -16,6 +16,7 @@ import {
 } from "@/client/features/dashboard/DashboardCards";
 import { Ga4Card } from "@/client/features/dashboard/Ga4Card";
 import { McpConnectCard } from "@/client/features/dashboard/McpConnectCard";
+import { RecommendedActionsCard } from "@/client/features/dashboard/RecommendedActionsCard";
 import { WorkspaceMergeBanner } from "@/client/features/dashboard/WorkspaceMergeBanner";
 import { getStandardErrorMessage } from "@/client/lib/error-messages";
 import type { DashboardActivation } from "@/server/features/dashboard/services/DashboardService";
@@ -309,6 +310,8 @@ export function DashboardPage({ projectId }: { projectId: string }) {
         <WorkspaceMergeBanner />
 
         <OnboardingChecklist projectId={projectId} activation={activation} />
+
+        <RecommendedActionsCard projectId={projectId} />
 
         {/* Every card is half width on large screens (only the checklist spans).
           Cards with data render before setup pitches and empty states. */}
