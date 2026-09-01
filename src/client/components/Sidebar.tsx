@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import {
   connectNavGroup,
+  estateNavGroup,
   getProjectNavGroups,
 } from "@/client/navigation/items";
 import { ProjectSwitcher } from "@/client/features/projects/ProjectSwitcher";
@@ -78,6 +79,7 @@ function SidebarNavLink({
 
 export function Sidebar({ projectId, onNavigate, onClose }: SidebarProps) {
   const navGroups = [
+    estateNavGroup,
     ...(projectId ? getProjectNavGroups(projectId) : []),
     connectNavGroup,
   ];
@@ -126,7 +128,7 @@ export function Sidebar({ projectId, onNavigate, onClose }: SidebarProps) {
           onClick={onNavigate}
           className="text-base font-semibold text-base-content"
         >
-          OpenSEO
+          Airspace
         </Link>
         {onClose ? (
           <button

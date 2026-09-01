@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Link2,
   MessageSquare,
+  Radar,
   Search,
   Sparkles,
   TrendingUp,
@@ -79,6 +80,19 @@ const aiNavItem = linkOptions({
 export const connectNavGroup = {
   label: "Connect",
   items: [aiNavItem],
+};
+
+const portfolioNavItem = linkOptions({
+  to: "/portfolio" as const,
+  label: "Portfolio",
+  icon: Radar,
+});
+
+// Airspace fork: cross-project estate view, always visible above the
+// project-scoped groups.
+export const estateNavGroup = {
+  label: "Estate",
+  items: [portfolioNavItem],
 };
 
 function getProjectNavItems(projectId: string) {

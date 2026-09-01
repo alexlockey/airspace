@@ -5,6 +5,13 @@
 }
 
 :root {
+  /* Airspace status colours: colour only ever carries meaning.
+     red = act now, amber = review, green = healthy, blue = context. */
+  --status-critical: oklch(64% 0.19 32);
+  --status-warn: oklch(72% 0.15 80);
+  --status-good: oklch(62% 0.16 155);
+  --status-info: oklch(64% 0.13 245);
+  --status-muted: oklch(60% 0 0);
   --trend-grid-color: oklch(56% 0.01 255 / 0.28);
   --trend-axis-color: oklch(42% 0.01 255 / 0.85);
   --trend-fill-start-opacity: 0.32;
@@ -114,6 +121,77 @@ select {
   outline: none;
   border-color: var(--color-primary);
   background-color: color-mix(in oklab, var(--color-primary) 10%, transparent);
+}
+
+/* Airspace dark theme: brighter status variants for contrast on dark ground */
+html[data-theme="openseo-dark"] {
+  --status-critical: oklch(72% 0.18 32);
+  --status-warn: oklch(80% 0.15 80);
+  --status-good: oklch(72% 0.16 155);
+  --status-info: oklch(72% 0.13 245);
+  --status-muted: oklch(65% 0 0);
+}
+
+/* Airspace status utilities: chips, row tints, dots, text */
+@layer utilities {
+  .text-status-critical {
+    color: var(--status-critical);
+  }
+  .text-status-warn {
+    color: var(--status-warn);
+  }
+  .text-status-good {
+    color: var(--status-good);
+  }
+  .text-status-info {
+    color: var(--status-info);
+  }
+  .status-chip {
+    display: inline-block;
+    border-radius: 9999px;
+    padding: 0.125rem 0.625rem;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .status-chip-critical {
+    color: var(--status-critical);
+    background: color-mix(in oklab, var(--status-critical) 16%, transparent);
+  }
+  .status-chip-warn {
+    color: var(--status-warn);
+    background: color-mix(in oklab, var(--status-warn) 16%, transparent);
+  }
+  .status-chip-good {
+    color: var(--status-good);
+    background: color-mix(in oklab, var(--status-good) 16%, transparent);
+  }
+  .status-chip-info {
+    color: var(--status-info);
+    background: color-mix(in oklab, var(--status-info) 16%, transparent);
+  }
+  .status-chip-muted {
+    color: var(--status-muted);
+    background: color-mix(in oklab, var(--status-muted) 14%, transparent);
+  }
+  .status-row-critical {
+    background: color-mix(in oklab, var(--status-critical) 7%, transparent);
+  }
+  .status-row-warn {
+    background: color-mix(in oklab, var(--status-warn) 7%, transparent);
+  }
+  .status-dot {
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+  }
+  .status-dot-good {
+    background: var(--status-good);
+  }
+  .status-dot-muted {
+    background: color-mix(in oklab, var(--status-muted) 45%, transparent);
+  }
 }
 
 /* Safe area utilities for mobile devices */

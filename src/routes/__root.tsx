@@ -32,7 +32,7 @@ export const Route = createRootRoute({
   head: () => ({
     meta: [
       {
-        title: "OpenSEO",
+        title: "Airspace",
       },
       {
         charSet: "utf-8",
@@ -61,6 +61,7 @@ export const Route = createRootRoute({
     ],
     links: [
       { rel: "stylesheet", href: appCss },
+      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
       {
         rel: "apple-touch-icon",
         sizes: "180x180",
