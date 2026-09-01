@@ -15,6 +15,13 @@ mechanical: after `git merge upstream/main`, re-check each item below.
   `ensureBacklinkSnapshot` (metered).
 - `public/favicon.svg` - Airspace radar mark.
 - `PATCHES.md` - this file.
+- `src/routes/api/selfhost-cron.ts` - secret-guarded endpoint driving
+  scheduled rank checks + stale-audit watchdog (Cloudflare cron does not
+  exist in Docker self-host; the droplet crontab POSTs every 10 minutes).
+- `src/client/features/backlinks/BacklinksFilterPresets.tsx` - Clean links /
+  Spam review one-click filter presets.
+- `src/client/features/backlinks/DisavowExportButton.tsx` - disavow file
+  generator from spam-scored loaded rows; never auto-submits.
 
 ## Edited upstream files (re-apply on conflict)
 
@@ -27,7 +34,12 @@ mechanical: after `git merge upstream/main`, re-check each item below.
 | `src/client/navigation/items.ts`        | `Radar` icon import; `portfolioNavItem` + exported `estateNavGroup`.                                                                                                          |
 | `src/client/features/auth/AuthPage.tsx` | logo img -> /favicon.svg, alt "Airspace".                                                                                                                                     |
 | `public/site.webmanifest`               | name/short_name "Airspace", theme colours #1E1B2E.                                                                                                                            |
-| `docker-entrypoint.sh`                  | startup banner names the fork.                                                                                                                                                |
+| `docker-entrypoint.sh`                  | startup banner names the fork.
+| `src/client/components/table/TablePagination.tsx` | optional `unitLabel` prop so grouped totals are labelled truthfully.
+| `src/client/features/backlinks/BacklinksPageSections.tsx` | presets + disavow buttons wired in; reconciling links-from-domains line; mode-dependent pagination unit.
+| `src/client/features/backlinks/BacklinksPageContent.tsx` | passes overview summary to the results card.
+| `src/client/features/dashboard/DashboardCards.tsx` | More details link scope matches the snapshot (subdomains).
+| `src/server/mcp/tools/get-backlinks-profile.ts` | grouped totals labelled as referring domains.                                                                                                                                                |
 
 ## Deliberately NOT rebranded
 
