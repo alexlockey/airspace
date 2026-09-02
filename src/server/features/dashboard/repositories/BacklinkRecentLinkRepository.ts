@@ -6,6 +6,8 @@ import { backlinkRecentLinks } from "@/db/schema";
 // backlink snapshot. The set is replaced wholesale per refresh, so the table
 // never grows past RECENT_LINKS_STORED rows per project.
 
+const INSERT_CHUNK_ROWS = 7;
+
 export type BacklinkRecentLink = typeof backlinkRecentLinks.$inferSelect;
 export type BacklinkRecentLinkInsert = typeof backlinkRecentLinks.$inferInsert;
 
@@ -16,8 +18,12 @@ async function replaceForProject(
   await db
     .delete(backlinkRecentLinks)
     .where(eq(backlinkRecentLinks.projectId, projectId));
-  if (rows.length > 0) {
-    await db.insert(backlinkRecentLinks).values(rows);
+  // D1 caps bound parameters at 100 per statement; 12 per row means a
+  // 20-row insert must be chunked.
+  for (let i = 0; i < rows.length; i += INSERT_CHUNK_ROWS) {
+    await db
+      .insert(backlinkRecentLinks)
+      .values(rows.slice(i, i + INSERT_CHUNK_ROWS));
   }
 }
 
