@@ -1,3 +1,4 @@
+import { BacklinkRecentLinkRepository } from "@/server/features/dashboard/repositories/BacklinkRecentLinkRepository";
 import { DashboardService } from "@/server/features/dashboard/services/DashboardService";
 import { ProjectRepository } from "@/server/features/projects/repositories/ProjectRepository";
 import { getEnvValueSync } from "@/server/lib/runtime-env";
@@ -24,21 +25,37 @@ export async function refreshStaleBacklinkSnapshots(env: object): Promise<{
   let failed = 0;
   for (const project of projects) {
     if (refreshed + failed >= MAX_REFRESHES_PER_TICK) break;
+    const billingCustomer = {
+      userId: "system",
+      userEmail: "system@openseo.so",
+      organizationId: project.organizationId,
+      projectId: project.id,
+    };
     try {
       const before = await DashboardService.getOverview({
         projectId: project.id,
         domain: project.domain,
       });
-      if (before.backlinks && !before.backlinks.stale) continue;
+      if (before.backlinks && !before.backlinks.stale) {
+        // Self-heal: a fresh summary with no stored links (failed rows call,
+        // or a project older than the links table) gets a links-only pass.
+        const stored = await BacklinkRecentLinkRepository.listForProject(
+          project.id,
+          { domain: project.domain, limit: 1 },
+        );
+        if (stored.length > 0 || !project.domain) continue;
+        await DashboardService.backfillRecentLinks({
+          projectId: project.id,
+          domain: project.domain,
+          billingCustomer,
+        });
+        refreshed += 1;
+        continue;
+      }
       await DashboardService.ensureBacklinkSnapshot({
         projectId: project.id,
         domain: project.domain,
-        billingCustomer: {
-          userId: "system",
-          userEmail: "system@openseo.so",
-          organizationId: project.organizationId,
-          projectId: project.id,
-        },
+        billingCustomer,
       });
       refreshed += 1;
     } catch (error) {

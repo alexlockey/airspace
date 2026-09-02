@@ -341,8 +341,29 @@ async function refreshRecentLinks(input: {
   }
 }
 
+/** Links-only refresh for a project whose summary snapshot is fresh but
+ * whose stored links are missing (a failed rows call, or a project that
+ * predates the table). One metered rows call; no summary spend. */
+async function backfillRecentLinks(input: {
+  projectId: string;
+  domain: string;
+  billingCustomer: BillingCustomerContext;
+}) {
+  const normalized = normalizeBacklinksTarget(input.domain, {
+    scope: "subdomains",
+  });
+  await refreshRecentLinks({
+    projectId: input.projectId,
+    domain: input.domain,
+    apiTarget: normalized.apiTarget,
+    includeSubdomains: normalized.includeSubdomains,
+    dataforseo: createDataforseoClient(input.billingCustomer),
+  });
+}
+
 export const DashboardService = {
   getActivation,
   getOverview,
   ensureBacklinkSnapshot,
+  backfillRecentLinks,
 };
