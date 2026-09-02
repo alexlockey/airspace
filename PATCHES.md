@@ -25,21 +25,21 @@ mechanical: after `git merge upstream/main`, re-check each item below.
 
 ## Edited upstream files (re-apply on conflict)
 
-| File                                    | Change                                                                                                                                                                        |
-| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/client/styles/app.css`             | `--status-*` colour tokens in `:root` + dark override, plus `.status-chip*`, `.status-row-*`, `.status-dot*`, `.text-status-*` utilities. Appended blocks; low conflict risk. |
-| `src/routes/__root.tsx`                 | title "Airspace"; svg favicon link added first in `links`.                                                                                                                    |
-| `src/client/components/Sidebar.tsx`     | wordmark "Airspace"; `estateNavGroup` imported and prepended to `navGroups`.                                                                                                  |
-| `src/client/layout/AppShell.tsx`        | mobile top-bar wordmark "Airspace".                                                                                                                                           |
-| `src/client/navigation/items.ts`        | `Radar` icon import; `portfolioNavItem` + exported `estateNavGroup`.                                                                                                          |
-| `src/client/features/auth/AuthPage.tsx` | logo img -> /favicon.svg, alt "Airspace".                                                                                                                                     |
-| `public/site.webmanifest`               | name/short_name "Airspace", theme colours #1E1B2E.                                                                                                                            |
-| `docker-entrypoint.sh`                  | startup banner names the fork.
-| `src/client/components/table/TablePagination.tsx` | optional `unitLabel` prop so grouped totals are labelled truthfully.
-| `src/client/features/backlinks/BacklinksPageSections.tsx` | presets + disavow buttons wired in; reconciling links-from-domains line; mode-dependent pagination unit.
-| `src/client/features/backlinks/BacklinksPageContent.tsx` | passes overview summary to the results card.
-| `src/client/features/dashboard/DashboardCards.tsx` | More details link scope matches the snapshot (subdomains).
-| `src/server/mcp/tools/get-backlinks-profile.ts` | grouped totals labelled as referring domains.                                                                                                                                                |
+| File                                                      | Change                                                                                                                                                                        |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/client/styles/app.css`                               | `--status-*` colour tokens in `:root` + dark override, plus `.status-chip*`, `.status-row-*`, `.status-dot*`, `.text-status-*` utilities. Appended blocks; low conflict risk. |
+| `src/routes/__root.tsx`                                   | title "Airspace"; svg favicon link added first in `links`.                                                                                                                    |
+| `src/client/components/Sidebar.tsx`                       | wordmark "Airspace"; `estateNavGroup` imported and prepended to `navGroups`.                                                                                                  |
+| `src/client/layout/AppShell.tsx`                          | mobile top-bar wordmark "Airspace".                                                                                                                                           |
+| `src/client/navigation/items.ts`                          | `Radar` icon import; `portfolioNavItem` + exported `estateNavGroup`.                                                                                                          |
+| `src/client/features/auth/AuthPage.tsx`                   | logo img -> /favicon.svg, alt "Airspace".                                                                                                                                     |
+| `public/site.webmanifest`                                 | name/short_name "Airspace", theme colours #1E1B2E.                                                                                                                            |
+| `docker-entrypoint.sh`                                    | startup banner names the fork.                                                                                                                                                |
+| `src/client/components/table/TablePagination.tsx`         | optional `unitLabel` prop so grouped totals are labelled truthfully.                                                                                                          |
+| `src/client/features/backlinks/BacklinksPageSections.tsx` | presets + disavow buttons wired in; reconciling links-from-domains line; mode-dependent pagination unit.                                                                      |
+| `src/client/features/backlinks/BacklinksPageContent.tsx`  | passes overview summary to the results card.                                                                                                                                  |
+| `src/client/features/dashboard/DashboardCards.tsx`        | More details link scope matches the snapshot (subdomains).                                                                                                                    |
+| `src/server/mcp/tools/get-backlinks-profile.ts`           | grouped totals labelled as referring domains.                                                                                                                                 |
 
 ## v1.3: site-type paradigm
 
@@ -55,12 +55,12 @@ mechanical: after `git merge upstream/main`, re-check each item below.
 
 - `src/server/features/portfolio/{PortfolioService,RecommendationsService}.ts`
   - health score (typed, explainable heuristic), free GSC daily series +
-  prev-period totals, refdomain history, rule-based evidence-cited
-  recommendations (site-type aware).
+    prev-period totals, refdomain history, rule-based evidence-cited
+    recommendations (site-type aware).
 - `src/serverFunctions/portfolio.ts` - portfolio fn + getProjectRecommendations
   (adds GSC striking-distance opportunities).
 - `src/routes/_app/portfolio.tsx` - Ahrefs-style site cards with sparklines.
-- `src/client/components/Sparkline.tsx`, 
+- `src/client/components/Sparkline.tsx`,
   `src/client/features/dashboard/RecommendedActionsCard.tsx` (wired into
   DashboardPage below the checklist).
 - `BacklinkSnapshotRepository.listRecentForProject`.
@@ -93,6 +93,29 @@ mechanical: after `git merge upstream/main`, re-check each item below.
   unfiltered.
 - siteType typed as the SiteType union end to end; DashboardRankSummary
   exported and imported; tests added for buildRecommendations/severity.
+
+## v1.6: new clean links on the portfolio + daily snapshot cron
+
+- `src/shared/backlinkQuality.ts` - CLEAN_LINK_MAX_SPAM_SCORE (29),
+  NEW_LINK_WINDOW_DAYS (30), RECENT_LINKS_STORED (20); the Backlinks presets
+  now import the clean threshold instead of hard-coding it.
+- `backlink_recent_links` table (both dialects; drizzle/0044,
+  drizzle-pg/0022) + `BacklinkRecentLinkRepository` (replace-per-project,
+  domain-guarded newest-first read).
+- `DashboardService.ensureBacklinkSnapshot` also fetches the 20 newest live
+  links (one per domain) with each new summary snapshot and stores them;
+  failure degrades to a log line so the paid summary is never rolled back.
+- `dailySnapshotRefresh.ts` runs from `runCronTick`: refreshes stale (>24h)
+  snapshots for every active project with a domain, max 3 per tick, so the
+  portfolio no longer depends on dashboard visits. Kill switch:
+  `AIRSPACE_DAILY_SNAPSHOTS=off`. `ProjectRepository.listActiveWithDomain`.
+- `recentLinks.ts` (`selectNewCleanLinks`, tested): clean = spam score <=
+  29 AND first seen within 30 days; unscored rows are not clean.
+- Portfolio card: green "+N new clean links" chip, top 3 linking domains as
+  external links to the linking page with target path, spam score and age,
+  and an "All recent links" link into the Backlinks page sorted newest
+  first. Muted state when nothing is new; explanatory state before the
+  first snapshot.
 
 ## Deliberately NOT rebranded
 

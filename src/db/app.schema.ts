@@ -426,3 +426,30 @@ export const backlinkSnapshots = sqliteTable(
     ),
   ],
 );
+
+// Airspace fork: the newest links per project, captured with the daily
+// backlink snapshot so the portfolio can flag fresh clean links without a
+// metered call per page view. Replaced wholesale on each refresh.
+export const backlinkRecentLinks = sqliteTable(
+  "backlink_recent_links",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    domain: text("domain").notNull(),
+    domainFrom: text("domain_from"),
+    urlFrom: text("url_from"),
+    urlTo: text("url_to"),
+    anchor: text("anchor"),
+    spamScore: integer("spam_score"),
+    rank: integer("rank"),
+    domainFromRank: integer("domain_from_rank"),
+    isDofollow: integer("is_dofollow", { mode: "boolean" }),
+    firstSeen: text("first_seen"),
+    capturedAt: text("captured_at")
+      .notNull()
+      .default(sql`(current_timestamp)`),
+  },
+  (table) => [index("backlink_recent_links_project_idx").on(table.projectId)],
+);

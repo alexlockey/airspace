@@ -1,5 +1,10 @@
 import { DashboardService } from "@/server/features/dashboard/services/DashboardService";
+import { BacklinkRecentLinkRepository } from "@/server/features/dashboard/repositories/BacklinkRecentLinkRepository";
 import { BacklinkSnapshotRepository } from "@/server/features/dashboard/repositories/BacklinkSnapshotRepository";
+import {
+  selectNewCleanLinks,
+  type NewCleanLink,
+} from "@/server/features/portfolio/recentLinks";
 import {
   GscNotConnectedError,
   GscService,
@@ -29,6 +34,8 @@ import { SITE_TYPES, type SiteType } from "@/types/schemas/projects";
 // metered DataForSEO refresh.
 
 const DAILY_ROW_LIMIT = 200;
+// Links shown inline on a site card; the count covers the whole stored set.
+const NEW_LINKS_SHOWN = 3;
 // Health model, named so tuning is one edit and reviewable.
 const HEALTH_CRITICAL_BASE = 20;
 const HEALTH_CRITICAL_SHARE = 20;
@@ -141,17 +148,22 @@ async function getPortfolioRow(project: {
   siteType: string;
 }) {
   const siteType = toSiteType(project.siteType);
-  const [overview, gscConnection, snapshots, gsc] = await Promise.all([
-    DashboardService.getOverview({
-      projectId: project.id,
-      domain: project.domain,
-    }),
-    GscConnectionRepository.getByProjectId(project.id),
-    BacklinkSnapshotRepository.listRecentForProject(project.id, {
-      domain: project.domain,
-    }),
-    getGscSummary(project.id),
-  ]);
+  const [overview, gscConnection, snapshots, gsc, recentLinks] =
+    await Promise.all([
+      DashboardService.getOverview({
+        projectId: project.id,
+        domain: project.domain,
+      }),
+      GscConnectionRepository.getByProjectId(project.id),
+      BacklinkSnapshotRepository.listRecentForProject(project.id, {
+        domain: project.domain,
+      }),
+      getGscSummary(project.id),
+      BacklinkRecentLinkRepository.listForProject(project.id, {
+        domain: project.domain,
+      }),
+    ]);
+  const newCleanLinks = selectNewCleanLinks(recentLinks);
   const recommendations = buildRecommendations({
     siteType,
     rank: overview.rank,
@@ -180,6 +192,12 @@ async function getPortfolioRow(project: {
       referringDomains: snapshot.referringDomains,
     })),
     recommendations,
+    newLinks: {
+      // Null until the first daily snapshot has stored links.
+      tracked: recentLinks.length > 0,
+      cleanCount: newCleanLinks.length,
+      shown: newCleanLinks.slice(0, NEW_LINKS_SHOWN),
+    },
     loadError: false,
   };
 }
@@ -213,6 +231,11 @@ async function getPortfolio(organizationId: string) {
           gsc: { connected: false as const, errored: true },
           refdomainHistory: [],
           recommendations: [] as Recommendation[],
+          newLinks: {
+            tracked: false,
+            cleanCount: 0,
+            shown: [] as NewCleanLink[],
+          },
           loadError: true,
         };
       }

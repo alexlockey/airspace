@@ -411,3 +411,26 @@ export const backlinkSnapshots = pgTable(
     ),
   ],
 );
+
+// Airspace fork: mirror of the SQLite backlink_recent_links table.
+export const backlinkRecentLinks = pgTable(
+  "backlink_recent_links",
+  {
+    id: serial("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    domain: text("domain").notNull(),
+    domainFrom: text("domain_from"),
+    urlFrom: text("url_from"),
+    urlTo: text("url_to"),
+    anchor: text("anchor"),
+    spamScore: integer("spam_score"),
+    rank: integer("rank"),
+    domainFromRank: integer("domain_from_rank"),
+    isDofollow: boolean("is_dofollow"),
+    firstSeen: text("first_seen"),
+    capturedAt: timestampColumn("captured_at").notNull().default(isoNow),
+  },
+  (table) => [index("backlink_recent_links_project_idx").on(table.projectId)],
+);

@@ -1,4 +1,5 @@
 import { ShieldAlert, ShieldCheck } from "lucide-react";
+import { CLEAN_LINK_MAX_SPAM_SCORE } from "@/shared/backlinkQuality";
 import {
   EMPTY_BACKLINKS_FILTERS,
   EMPTY_REFERRING_DOMAINS_FILTERS,
@@ -24,14 +25,14 @@ export function BacklinksFilterPresets({
     if (activeTab === "backlinks") {
       filters.backlinks.apply({
         ...EMPTY_BACKLINKS_FILTERS,
-        maxSpamScore: "29",
+        maxSpamScore: String(CLEAN_LINK_MAX_SPAM_SCORE),
         hideLost: "true",
         hideBroken: "true",
       });
     } else {
       filters.domains.apply({
         ...EMPTY_REFERRING_DOMAINS_FILTERS,
-        maxSpamScore: "29",
+        maxSpamScore: String(CLEAN_LINK_MAX_SPAM_SCORE),
       });
     }
     onPageChange(1);

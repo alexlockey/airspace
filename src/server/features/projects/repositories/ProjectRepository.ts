@@ -13,6 +13,15 @@ async function listProjects(organizationId: string) {
   });
 }
 
+// Airspace fork: cross-org listing for the daily snapshot refresh. Only
+// projects with a domain can have backlink data.
+async function listActiveWithDomain() {
+  return db.query.projects.findMany({
+    where: and(isNull(projects.archivedAt), isNotNull(projects.domain)),
+    orderBy: [desc(projects.createdAt), desc(projects.id)],
+  });
+}
+
 async function countProjects(organizationId: string) {
   const [row] = await db
     .select({ value: count() })
@@ -241,6 +250,7 @@ async function archiveProject(projectId: string, organizationId: string) {
 
 export const ProjectRepository = {
   listProjects,
+  listActiveWithDomain,
   listArchivedProjects,
   countProjects,
   getProjectForOrganization,

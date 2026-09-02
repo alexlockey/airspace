@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Radar } from "lucide-react";
+import { ExternalLink, Radar } from "lucide-react";
 import { getPortfolioOverview } from "@/serverFunctions/portfolio";
 import { Sparkline } from "@/client/components/Sparkline";
 
@@ -153,6 +153,95 @@ function SiteCardStats({ row }: { row: PortfolioRow }) {
   );
 }
 
+function shortPath(url: string) {
+  try {
+    const parsed = new URL(url);
+    const path = parsed.pathname === "/" ? "" : parsed.pathname;
+    return `${parsed.hostname}${path}`.slice(0, 48);
+  } catch {
+    return url.slice(0, 48);
+  }
+}
+
+function daysAgo(iso: string) {
+  const ms = Date.now() - Date.parse(iso);
+  if (Number.isNaN(ms)) return "";
+  const days = Math.max(0, Math.floor(ms / 86_400_000));
+  return days === 0 ? "today" : days === 1 ? "1d ago" : `${days}d ago`;
+}
+
+/** New clean links: the good news row. Green when there is something to
+ * celebrate, muted otherwise, and every entry opens the linking page. */
+function NewLinksRow({ row }: { row: PortfolioRow }) {
+  const { newLinks } = row;
+  const domain = row.project.domain;
+  if (!newLinks.tracked || !domain) {
+    return (
+      <div className="mt-3 text-xs text-base-content/30">
+        New links appear after the first daily snapshot.
+      </div>
+    );
+  }
+  return (
+    <div className="mt-3 rounded-md border border-base-300/60 px-3 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <span
+          className={
+            newLinks.cleanCount > 0
+              ? "status-chip status-chip-good"
+              : "status-chip status-chip-muted"
+          }
+        >
+          {newLinks.cleanCount > 0
+            ? `+${newLinks.cleanCount} new clean link${
+                newLinks.cleanCount === 1 ? "" : "s"
+              }`
+            : "No new clean links (30d)"}
+        </span>
+        <Link
+          to="/p/$projectId/backlinks"
+          params={{ projectId: row.project.id }}
+          search={{
+            target: domain,
+            scope: "subdomains",
+            tab: "backlinks",
+            sort: "firstSeen",
+            order: "desc",
+          }}
+          className="text-xs text-primary hover:underline"
+        >
+          All recent links
+        </Link>
+      </div>
+      {newLinks.shown.length > 0 ? (
+        <ul className="mt-2 space-y-1">
+          {newLinks.shown.map((link) => (
+            <li key={link.urlFrom} className="flex items-center gap-2 text-xs">
+              <a
+                href={link.urlFrom}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-w-0 items-center gap-1 font-medium hover:underline"
+                title={link.urlFrom}
+              >
+                <span className="truncate">{link.domainFrom}</span>
+                <ExternalLink className="size-3 shrink-0 text-base-content/40" />
+              </a>
+              <span className="truncate text-base-content/50">
+                {link.urlTo ? `→ ${shortPath(link.urlTo)}` : ""}
+              </span>
+              <span className="ml-auto shrink-0 tabular-nums text-base-content/40">
+                {link.isDofollow === false ? "nofollow · " : ""}
+                spam {link.spamScore} · {daysAgo(link.firstSeen)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 function SiteCard({ row }: { row: PortfolioRow }) {
   const severity = row.severity;
   const chip = severityChip[severity];
@@ -242,6 +331,8 @@ function SiteCard({ row }: { row: PortfolioRow }) {
             </div>
           </div>
 
+          <NewLinksRow row={row} />
+
           {topRec ? (
             <Link
               to="/p/$projectId"
@@ -320,9 +411,9 @@ function PortfolioPage() {
         )}
 
         <p className="text-xs text-base-content/40">
-          Stored snapshots plus free Search Console data; visiting a project
-          dashboard refreshes its snapshots. Backlink deltas are the provider's
-          reporting period; clicks compare the previous 28 days.
+          Stored snapshots plus free Search Console data; snapshots refresh
+          daily (and on a project dashboard visit). Backlink deltas are the
+          provider's reporting period; clicks compare the previous 28 days.
         </p>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import { withPgClient } from "@/db";
 import { reconcileStaleAudits } from "@/server/features/audit/services/auditReconciler";
+import { refreshStaleBacklinkSnapshots } from "@/server/features/dashboard/services/dailySnapshotRefresh";
 import { runScheduledRankChecks } from "@/server/features/rank-tracking/services/scheduledRankChecks";
 
 // Airspace fork: the non-purge cron body, extracted so the Workers scheduled
@@ -18,5 +19,12 @@ export async function runCronTick(
     console.error("[cron] Stale-audit reconcile failed:", err);
   }
   await withPgClient(() => runScheduledRankChecks(env));
+  // Airspace fork: keeps portfolio link data (incl. new clean links) daily
+  // fresh. Held like the watchdog so it can never suppress the jobs above.
+  try {
+    await withPgClient(() => refreshStaleBacklinkSnapshots(env));
+  } catch (err) {
+    console.error("[cron] Daily backlink snapshot refresh failed:", err);
+  }
   return { watchdogError };
 }

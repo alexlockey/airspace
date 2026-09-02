@@ -2,7 +2,10 @@ import type { BillingCustomerContext } from "@/server/billing/subscription";
 import { ActivationRepository } from "@/server/features/activation/repositories/ActivationRepository";
 import { AuditRepository } from "@/server/features/audit/repositories/AuditRepository";
 import { getIssueTypePageCountsForAudit } from "@/server/features/audit/repositories/auditSummaryQueries";
+import { BacklinkRecentLinkRepository } from "@/server/features/dashboard/repositories/BacklinkRecentLinkRepository";
 import { BacklinkSnapshotRepository } from "@/server/features/dashboard/repositories/BacklinkSnapshotRepository";
+import { mapBacklinksRows } from "@/server/features/backlinks/services/backlinksRowMappers";
+import { RECENT_LINKS_STORED } from "@/shared/backlinkQuality";
 import { Ga4ConnectionRepository } from "@/server/features/ga4/repositories/Ga4ConnectionRepository";
 import { GscConnectionRepository } from "@/server/features/gsc/repositories/GscConnectionRepository";
 import { RankTrackingRepository } from "@/server/features/rank-tracking/repositories/RankTrackingRepository";
@@ -269,6 +272,16 @@ async function ensureBacklinkSnapshot(input: {
         null,
       capturedAt: new Date().toISOString(),
     });
+    // Airspace fork: the newest links ride along with the daily summary so
+    // the portfolio can flag fresh clean links. Failure here must not undo
+    // the snapshot we just paid for, so it degrades to a log line.
+    await refreshRecentLinks({
+      projectId,
+      domain,
+      apiTarget: normalized.apiTarget,
+      includeSubdomains: normalized.includeSubdomains,
+      dataforseo,
+    });
   } catch (error) {
     if (latestMatchesDomain) {
       console.error("dashboard: backlink snapshot refresh failed", error);
@@ -278,6 +291,52 @@ async function ensureBacklinkSnapshot(input: {
   }
 
   return getBacklinkSummary(projectId, domain);
+}
+
+/** Live (not lost) links, newest first, one per referring domain. One
+ * metered rows call per snapshot refresh; the rest of the page reads the
+ * stored copy. */
+async function refreshRecentLinks(input: {
+  projectId: string;
+  domain: string;
+  apiTarget: string;
+  includeSubdomains: boolean;
+  dataforseo: ReturnType<typeof createDataforseoClient>;
+}) {
+  try {
+    const response = await input.dataforseo.backlinks.rows({
+      target: input.apiTarget,
+      includeSubdomains: input.includeSubdomains,
+      limit: RECENT_LINKS_STORED,
+      orderBy: ["first_seen,desc"],
+      mode: "one_per_domain",
+      filters: ["is_lost", "=", false],
+    });
+    const capturedAt = new Date().toISOString();
+    await BacklinkRecentLinkRepository.replaceForProject(
+      input.projectId,
+      mapBacklinksRows(response.items).map((row) => ({
+        projectId: input.projectId,
+        domain: input.domain,
+        domainFrom: row.domainFrom,
+        urlFrom: row.urlFrom,
+        urlTo: row.urlTo,
+        anchor: row.anchor,
+        spamScore: row.spamScore,
+        rank: row.rank,
+        domainFromRank: row.domainFromRank,
+        isDofollow: row.isDofollow,
+        firstSeen: row.firstSeen,
+        capturedAt,
+      })),
+    );
+  } catch (error) {
+    console.error(
+      "dashboard: recent links refresh failed",
+      { projectId: input.projectId },
+      error,
+    );
+  }
 }
 
 export const DashboardService = {
