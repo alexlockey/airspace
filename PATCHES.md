@@ -116,6 +116,10 @@ mechanical: after `git merge upstream/main`, re-check each item below.
   and an "All recent links" link into the Backlinks page sorted newest
   first. Muted state when nothing is new; explanatory state before the
   first snapshot.
+- v1.6.1/2: the rows filter must be NESTED (`[["is_lost","=",false]]`)
+  because fetchBacklinksRows appends its default spam condition with
+  "and"; the daily job self-heals a fresh snapshot with no stored links via
+  `DashboardService.backfillRecentLinks` (links-only, one rows call).
 
 ## Deliberately NOT rebranded
 
