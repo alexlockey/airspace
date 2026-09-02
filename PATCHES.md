@@ -119,7 +119,7 @@ mechanical: after `git merge upstream/main`, re-check each item below.
 - v1.6.1/2: the rows filter must be NESTED (`[["is_lost","=",false]]`)
   because fetchBacklinksRows appends its default spam condition with
   "and"; the daily job self-heals a fresh snapshot with no stored links via
-  `DashboardService.backfillRecentLinks` (links-only, one rows call).
+  `DashboardService.backfillRecentLinks` (links-only, one rows call). v1.6.3: inserts chunked to 7 rows (D1 caps bound parameters at 100 per statement; the error surfaces only as a bare DrizzleQueryError).
 
 ## Deliberately NOT rebranded
 
