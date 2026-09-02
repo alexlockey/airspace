@@ -310,7 +310,9 @@ async function refreshRecentLinks(input: {
       limit: RECENT_LINKS_STORED,
       orderBy: ["first_seen,desc"],
       mode: "one_per_domain",
-      filters: ["is_lost", "=", false],
+      // Nested: fetchBacklinksRows appends its default spam condition with
+      // "and", which only nests correctly around a condition array.
+      filters: [["is_lost", "=", false]],
     });
     const capturedAt = new Date().toISOString();
     await BacklinkRecentLinkRepository.replaceForProject(
