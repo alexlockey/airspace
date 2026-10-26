@@ -120,6 +120,13 @@ mechanical: after `git merge upstream/main`, re-check each item below.
   because fetchBacklinksRows appends its default spam condition with
   "and"; the daily job self-heals a fresh snapshot with no stored links via
   `DashboardService.backfillRecentLinks` (links-only, one rows call). v1.6.3: inserts chunked to 7 rows (D1 caps bound parameters at 100 per statement; the error surfaces only as a bare DrizzleQueryError).
+- v1.6.4 (26 Oct 2026): self-heal REMOVED. A domain with zero backlinks
+  stores no rows, so the self-heal re-paid for the same empty rows call on
+  every cron tick (~$7/day of DataForSEO). A fresh snapshot is now always
+  skipped; links refresh only with the next daily snapshot. The droplet
+  also runs with `AIRSPACE_DAILY_SNAPSHOTS=off` (env file
+  `/root/openseo/airspace.env`) and all rank trackers paused, so DataForSEO
+  is spent on demand only.
 
 ## Deliberately NOT rebranded
 

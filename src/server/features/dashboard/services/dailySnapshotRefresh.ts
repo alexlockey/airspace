@@ -1,4 +1,3 @@
-import { BacklinkRecentLinkRepository } from "@/server/features/dashboard/repositories/BacklinkRecentLinkRepository";
 import { DashboardService } from "@/server/features/dashboard/services/DashboardService";
 import { ProjectRepository } from "@/server/features/projects/repositories/ProjectRepository";
 import { getEnvValueSync } from "@/server/lib/runtime-env";
@@ -36,22 +35,11 @@ export async function refreshStaleBacklinkSnapshots(env: object): Promise<{
         projectId: project.id,
         domain: project.domain,
       });
-      if (before.backlinks && !before.backlinks.stale) {
-        // Self-heal: a fresh summary with no stored links (failed rows call,
-        // or a project older than the links table) gets a links-only pass.
-        const stored = await BacklinkRecentLinkRepository.listForProject(
-          project.id,
-          { domain: project.domain, limit: 1 },
-        );
-        if (stored.length > 0 || !project.domain) continue;
-        await DashboardService.backfillRecentLinks({
-          projectId: project.id,
-          domain: project.domain,
-          billingCustomer,
-        });
-        refreshed += 1;
-        continue;
-      }
+      // A fresh summary is never re-fetched here, even with no stored links:
+      // a domain with zero backlinks stores nothing, so a links-only
+      // "self-heal" re-paid for the same empty rows call on every tick
+      // (~$7/day, Oct 2026). Links refresh with the next daily snapshot.
+      if (before.backlinks && !before.backlinks.stale) continue;
       await DashboardService.ensureBacklinkSnapshot({
         projectId: project.id,
         domain: project.domain,
