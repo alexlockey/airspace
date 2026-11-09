@@ -1,6 +1,11 @@
 import { getAuth } from "@/lib/auth";
 import { GSC_OAUTH_PROVIDER_ID } from "@/shared/gsc";
 import { GscApiError, GscTokenError } from "./gscErrors";
+import {
+  GSC_SERVICE_ACCOUNT_SCOPE,
+  isServiceAccountId,
+  mintServiceAccountToken,
+} from "@/server/lib/googleServiceAccount";
 
 export { GscApiError, GscTokenError } from "./gscErrors";
 
@@ -85,6 +90,17 @@ export function createGscClient(opts: {
   gscAccountId?: string;
 }) {
   async function getToken(): Promise<string> {
+    // Airspace fork: service-account connections never touch Better Auth.
+    if (isServiceAccountId(opts.gscAccountId)) {
+      try {
+        return await mintServiceAccountToken(GSC_SERVICE_ACCOUNT_SCOPE);
+      } catch (error) {
+        throw new GscTokenError(
+          "Could not mint a Search Console token for the service account.",
+          error,
+        );
+      }
+    }
     let result: { accessToken?: string } | undefined;
     try {
       // Headerless call: getAccessToken trusts body.userId when no request

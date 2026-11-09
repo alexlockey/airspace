@@ -1,5 +1,10 @@
 /* eslint-disable max-lines -- one client module per Google integration (gscClient precedent); GA4 spans the Admin and Data APIs */
 import { z } from "zod";
+import {
+  GA4_SERVICE_ACCOUNT_SCOPE,
+  isServiceAccountId,
+  mintServiceAccountToken,
+} from "@/server/lib/googleServiceAccount";
 import { getAuth } from "@/lib/auth";
 import {
   Ga4AdminApiError,
@@ -128,6 +133,17 @@ async function getGa4AccessToken(opts: {
   userId: string;
   ga4AccountId: string;
 }): Promise<string> {
+  // Airspace fork: service-account connections never touch Better Auth.
+  if (isServiceAccountId(opts.ga4AccountId)) {
+    try {
+      return await mintServiceAccountToken(GA4_SERVICE_ACCOUNT_SCOPE);
+    } catch (error) {
+      throw new Ga4TokenError(
+        "Could not mint a Google Analytics token for the service account.",
+        error,
+      );
+    }
+  }
   let result: { accessToken?: string } | undefined;
   try {
     result = await getAuth().api.getAccessToken({

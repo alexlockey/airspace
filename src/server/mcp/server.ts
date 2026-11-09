@@ -70,6 +70,10 @@ import {
   runSiteAuditTool,
 } from "@/server/mcp/tools/site-audit-tools";
 import { whoamiTool } from "@/server/mcp/tools/whoami";
+import {
+  bindGoogleServiceAccountTool,
+  getPortfolioTool,
+} from "@/server/mcp/tools/airspace-estate-tools";
 
 type ToolSchema = z.ZodType | z.ZodRawShape;
 
@@ -155,6 +159,8 @@ export function createOpenSeoMcpServer(authProps: McpProps) {
 
   register(whoamiTool);
   register(listProjectsTool);
+  register(getPortfolioTool);
+  register(bindGoogleServiceAccountTool);
   register(createProjectTool);
   register(getProjectContextTool);
   register(updateProjectContextTool);

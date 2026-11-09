@@ -1,6 +1,7 @@
 import { withPgClient } from "@/db";
 import { reconcileStaleAudits } from "@/server/features/audit/services/auditReconciler";
 import { refreshStaleBacklinkSnapshots } from "@/server/features/dashboard/services/dailySnapshotRefresh";
+import { ServiceAccountBindingService } from "@/server/features/google/ServiceAccountBindingService";
 import { runScheduledRankChecks } from "@/server/features/rank-tracking/services/scheduledRankChecks";
 
 // Airspace fork: the non-purge cron body, extracted so the Workers scheduled
@@ -25,6 +26,13 @@ export async function runCronTick(
     await withPgClient(() => refreshStaleBacklinkSnapshots(env));
   } catch (err) {
     console.error("[cron] Daily backlink snapshot refresh failed:", err);
+  }
+  // Airspace fork: keep every project bound to the Google service account
+  // (throttled to six hours inside the service). Never blocks the jobs above.
+  try {
+    await withPgClient(() => ServiceAccountBindingService.bindIfDue());
+  } catch (err) {
+    console.error("[cron] Google service-account binding failed:", err);
   }
   return { watchdogError };
 }

@@ -128,6 +128,26 @@ mechanical: after `git merge upstream/main`, re-check each item below.
   `/root/openseo/airspace.env`) and all rank trackers paused, so DataForSEO
   is spent on demand only.
 
+## v1.7: Google service account + estate MCP tools (9 Nov 2026)
+
+- Why: the self-hosted OAuth client sat in Google's Testing status, which caps
+  refresh tokens at seven days, so every GSC and GA4 grant died weekly and
+  every session asked to reconnect. GA4 had never been bound to a project.
+- `src/server/lib/googleServiceAccount.ts` (+ test): RS256 JWT via Web Crypto
+  (runs in workerd and Node), jwt-bearer token exchange, per-scope cache.
+  Configured by `AIRSPACE_GOOGLE_SA_JSON_B64`. Sentinel account id
+  `service-account` marks a connection as service-account owned.
+- `src/server/lib/gscClient.ts`, `src/server/lib/ga4Client.ts`: a connection
+  whose account id is the sentinel mints a service-account token instead of
+  asking Better Auth. OAuth connections are untouched (upstream path intact).
+- `src/server/features/google/{serviceAccountMatching,ServiceAccountBindingService}.ts`
+  (+ test): binds every project with a domain to the GSC site (domain property
+  first) and GA4 property (by web-stream host) the service account can see.
+  Runs from `runCronTick` at most every six hours, and on demand.
+- MCP: `get_portfolio` (free estate overview from PortfolioService, used by
+  the Airspace Weekly runner) and `bind_google_service_account`, in
+  `src/server/mcp/tools/airspace-estate-tools.ts`, registered in server.ts.
+
 ## Deliberately NOT rebranded
 
 - `/ai` MCP setup page, help pages, plugin/skill directories, package name,
