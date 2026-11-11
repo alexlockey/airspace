@@ -105,6 +105,21 @@ describe("page labels", () => {
 });
 
 describe("pageMovers", () => {
+  it("treats www and bare-host spellings of a page as one page", () => {
+    const movers = pageMovers(
+      [
+        { page: "https://www.g.co.uk/", clicks: 900 },
+        { page: "https://g.co.uk/", clicks: 100 },
+      ],
+      [
+        { page: "https://www.g.co.uk/", clicks: 862 },
+        { page: "https://g.co.uk/", clicks: 171 },
+      ],
+    );
+    expect(movers.gained).toBeNull();
+    expect(movers.lost).toEqual({ page: "https://www.g.co.uk/", clicks: 1000, delta: -33 });
+  });
+
   it("sums job-board adverts per section", () => {
     const movers = pageMovers(
       [

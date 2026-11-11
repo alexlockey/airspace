@@ -208,14 +208,26 @@ function sectionOf(url: string) {
   }
 }
 
+/** One key per page however Search Console spells it: http/https and www or
+ * not are the same page, so they never show as gaining and losing at once. */
+function pageKey(url: string) {
+  return url
+    .toLowerCase()
+    .replace(/^https?:\/\/(www\.)?/, "")
+    .replace(/\/$/, "");
+}
+
 function foldFragments(
   rows: { page: string; clicks: number }[],
   bySection: boolean,
+  display: Map<string, string>,
 ) {
   const map = new Map<string, number>();
   for (const row of rows) {
     const whole = row.page.split("#", 1)[0] ?? row.page;
-    const page = bySection ? sectionOf(whole) : whole;
+    const url = bySection ? sectionOf(whole) : whole;
+    const page = pageKey(url);
+    if (!display.has(page)) display.set(page, url);
     map.set(page, (map.get(page) ?? 0) + row.clicks);
   }
   return map;
@@ -229,11 +241,12 @@ export function pageMovers(
   options: { bySection?: boolean } = {},
 ): { gained: PageMover | null; lost: PageMover | null } {
   const bySection = options.bySection === true;
-  const cur = foldFragments(current, bySection);
-  const prev = foldFragments(previous, bySection);
+  const display = new Map<string, string>();
+  const cur = foldFragments(current, bySection, display);
+  const prev = foldFragments(previous, bySection, display);
   const pages = new Set([...cur.keys(), ...prev.keys()]);
   const deltas = [...pages].map((page) => ({
-    page,
+    page: display.get(page) ?? page,
     clicks: cur.get(page) ?? 0,
     delta: (cur.get(page) ?? 0) - (prev.get(page) ?? 0),
     ...(bySection ? { section: true } : {}),
