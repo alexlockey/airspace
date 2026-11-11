@@ -337,6 +337,13 @@
       "when": 1794389867921,
       "tag": "0047_airspace_fork_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1794394006724,
+      "tag": "0048_airspace_authority_and_cache",
+      "breakpoints": true
     }
   ]
 }

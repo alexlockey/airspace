@@ -1,24 +1,26 @@
 import { sort } from "remeda";
 import type { ReactNode } from "react";
 import { Link, createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { ExternalLink, Radar } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Radar, RefreshCw } from "lucide-react";
 import { getPortfolioOverview } from "@/serverFunctions/portfolio";
 import { Sparkline } from "@/client/components/Sparkline";
+import {
+  EstateGlance,
+  TrendLines,
+  authorityLabel,
+  minutesAgo,
+  severityOrder,
+  type PortfolioRow,
+} from "@/client/features/portfolio/EstateGlance";
+import { NewLinksRow } from "@/client/features/portfolio/NewLinksRow";
+
+type Severity = PortfolioRow["severity"];
 
 export const Route = createFileRoute("/_app/portfolio")({
   component: PortfolioPage,
 });
 
-type PortfolioRow = Awaited<ReturnType<typeof getPortfolioOverview>>[number];
-type Severity = PortfolioRow["severity"];
-
-const severityOrder: Record<Severity, number> = {
-  critical: 0,
-  warn: 1,
-  nodata: 2,
-  good: 3,
-};
 
 const severityChip: Record<Severity, { label: string; className: string }> = {
   critical: { label: "Act now", className: "status-chip status-chip-critical" },
@@ -90,6 +92,7 @@ function SiteCardStats({ row }: { row: PortfolioRow }) {
   const clicksDelta = gsc
     ? pctDelta(gsc.totals.clicks, gsc.prevTotals.clicks)
     : null;
+  const authority = authorityLabel(row);
   const newRefs = row.backlinks?.newReferringDomains ?? 0;
   const lostRefs = row.backlinks?.lostReferringDomains ?? 0;
   return (
@@ -111,8 +114,16 @@ function SiteCardStats({ row }: { row: PortfolioRow }) {
         }
       />
       <Stat
-        label="Rank"
-        value={row.backlinks?.rank != null ? String(row.backlinks.rank) : "-"}
+        label={authority.label}
+        value={authority.value}
+        delta={
+          authority.change !== null && Math.abs(authority.change) >= 1 ? (
+            <DeltaText tone={authority.change < 0 ? "bad" : "good"}>
+              {authority.change > 0 ? "+" : ""}
+              {authority.change}
+            </DeltaText>
+          ) : null
+        }
       />
       <Stat
         label="Ref domains"
@@ -154,95 +165,6 @@ function SiteCardStats({ row }: { row: PortfolioRow }) {
   );
 }
 
-function shortPath(url: string) {
-  try {
-    const parsed = new URL(url);
-    const path = parsed.pathname === "/" ? "" : parsed.pathname;
-    return `${parsed.hostname}${path}`.slice(0, 48);
-  } catch {
-    return url.slice(0, 48);
-  }
-}
-
-function daysAgo(iso: string) {
-  const ms = Date.now() - Date.parse(iso);
-  if (Number.isNaN(ms)) return "";
-  const days = Math.max(0, Math.floor(ms / 86_400_000));
-  return days === 0 ? "today" : days === 1 ? "1d ago" : `${days}d ago`;
-}
-
-/** New clean links: the good news row. Green when there is something to
- * celebrate, muted otherwise, and every entry opens the linking page. */
-function NewLinksRow({ row }: { row: PortfolioRow }) {
-  const { newLinks } = row;
-  const domain = row.project.domain;
-  if (!newLinks.tracked || !domain) {
-    return (
-      <div className="mt-3 text-xs text-muted-foreground/70">
-        New links appear after the first daily snapshot.
-      </div>
-    );
-  }
-  return (
-    <div className="mt-3 rounded-md border border-border/60 px-3 py-2">
-      <div className="flex items-center justify-between gap-2">
-        <span
-          className={
-            newLinks.cleanCount > 0
-              ? "status-chip status-chip-good"
-              : "status-chip status-chip-muted"
-          }
-        >
-          {newLinks.cleanCount > 0
-            ? `+${newLinks.cleanCount} new clean link${
-                newLinks.cleanCount === 1 ? "" : "s"
-              }`
-            : "No new clean links (30d)"}
-        </span>
-        <Link
-          to="/p/$projectId/backlinks"
-          params={{ projectId: row.project.id }}
-          search={{
-            target: domain,
-            scope: "subdomains",
-            tab: "backlinks",
-            sort: "firstSeen",
-            order: "desc",
-          }}
-          className="text-xs text-primary hover:underline"
-        >
-          All recent links
-        </Link>
-      </div>
-      {newLinks.shown.length > 0 ? (
-        <ul className="mt-2 space-y-1">
-          {newLinks.shown.map((link) => (
-            <li key={link.urlFrom} className="flex items-center gap-2 text-xs">
-              <a
-                href={link.urlFrom}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex min-w-0 items-center gap-1 font-medium hover:underline"
-                title={link.urlFrom}
-              >
-                <span className="truncate">{link.domainFrom}</span>
-                <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
-              </a>
-              <span className="truncate text-muted-foreground">
-                {link.urlTo ? `→ ${shortPath(link.urlTo)}` : ""}
-              </span>
-              <span className="ml-auto shrink-0 tabular-nums text-muted-foreground">
-                {link.isDofollow === false ? "nofollow · " : ""}
-                spam {link.spamScore} · {daysAgo(link.firstSeen)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </div>
-  );
-}
-
 function SiteCard({ row }: { row: PortfolioRow }) {
   const severity = row.severity;
   const chip = severityChip[severity];
@@ -256,6 +178,8 @@ function SiteCard({ row }: { row: PortfolioRow }) {
   const refSpark = row.refdomainHistory
     .map((point) => point.referringDomains)
     .filter((value): value is number => value !== null);
+  const authoritySeries =
+    row.authority.dataforseoRank?.series ?? row.authority.ahrefsDr?.series ?? [];
   const tint =
     severity === "critical"
       ? "status-row-critical"
@@ -265,7 +189,8 @@ function SiteCard({ row }: { row: PortfolioRow }) {
 
   return (
     <div
-      className={`rounded-lg border border-border bg-card p-4 ${tint}`}
+      id={`site-${row.project.id}`}
+      className={`scroll-mt-4 rounded-lg border border-border bg-card p-4 ${tint}`}
     >
       <div className="flex items-start justify-between gap-2">
         <Link
@@ -289,6 +214,8 @@ function SiteCard({ row }: { row: PortfolioRow }) {
         </Link>
         <span className={chip.className}>{chip.label}</span>
       </div>
+
+      {!row.loadError ? <TrendLines row={row} /> : null}
 
       {row.loadError ? (
         <p className="mt-3 text-sm text-status-critical">
@@ -317,9 +244,14 @@ function SiteCard({ row }: { row: PortfolioRow }) {
             </div>
             <div className="w-28 shrink-0">
               <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Ref domains
+                {authoritySeries.length >= 2 ? "Authority, 12m" : "Ref domains"}
               </div>
-              {refSpark.length >= 2 ? (
+              {authoritySeries.length >= 2 ? (
+                <Sparkline
+                  values={authoritySeries.map((point) => point.value)}
+                  className="mt-1 h-9 w-full text-status-info"
+                />
+              ) : refSpark.length >= 2 ? (
                 <Sparkline
                   values={refSpark}
                   className="mt-1 h-9 w-full text-status-info"
@@ -368,13 +300,18 @@ function SiteCard({ row }: { row: PortfolioRow }) {
 }
 
 function PortfolioPage() {
+  const queryClient = useQueryClient();
   const portfolioQuery = useQuery({
     queryKey: ["portfolio"],
-    queryFn: () => getPortfolioOverview(),
+    queryFn: () => getPortfolioOverview({ data: {} }),
+  });
+  const refresh = useMutation({
+    mutationFn: () => getPortfolioOverview({ data: { force: true } }),
+    onSuccess: (fresh) => queryClient.setQueryData(["portfolio"], fresh),
   });
 
   const rows = sort(
-    portfolioQuery.data ?? [],
+    portfolioQuery.data?.rows ?? [],
     (a, z) => severityOrder[a.severity] - severityOrder[z.severity],
   );
 
@@ -391,6 +328,22 @@ function PortfolioPage() {
             profile, tracked movement and the next action. Colours carry
             meaning: red act, amber review, green healthy.
           </p>
+          {portfolioQuery.data ? (
+            <p className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+              Updated {minutesAgo(portfolioQuery.data.computedAt)}
+              <button
+                type="button"
+                onClick={() => refresh.mutate()}
+                disabled={refresh.isPending}
+                className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
+              >
+                <RefreshCw
+                  className={`size-3 ${refresh.isPending ? "animate-spin" : ""}`}
+                />
+                {refresh.isPending ? "Refreshing" : "Refresh"}
+              </button>
+            </p>
+          ) : null}
         </div>
 
         {portfolioQuery.isLoading ? (
@@ -405,17 +358,22 @@ function PortfolioPage() {
             </span>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-            {rows.map((row) => (
-              <SiteCard key={row.project.id} row={row} />
-            ))}
-          </div>
+          <>
+            <EstateGlance rows={rows} />
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              {rows.map((row) => (
+                <SiteCard key={row.project.id} row={row} />
+              ))}
+            </div>
+          </>
         )}
 
         <p className="text-xs text-muted-foreground">
-          Stored snapshots plus free Search Console data; snapshots refresh
-          daily (and on a project dashboard visit). Backlink deltas are the
-          provider's reporting period; clicks compare the previous 28 days.
+          Stored snapshots plus free Search Console data, recomputed hourly.
+          Clicks compare the last 28 days with the 28 before. Domain Rating is
+          Ahrefs&apos; score, recorded when captured; Authority is DataForSEO&apos;s
+          monthly domain rank (0 to 100). Neither is a Google signal: they show
+          whether the link profile is getting stronger.
         </p>
       </div>
     </div>

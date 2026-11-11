@@ -27,6 +27,14 @@ import {
 } from "@/server/features/portfolio/RecommendationsService";
 import { isIssueNeutralForSiteType } from "@/shared/siteTypeRules";
 import { SITE_TYPES, type SiteType } from "@/types/schemas/projects";
+import { AuthorityService } from "@/server/features/portfolio/AuthorityService";
+import { PortfolioCacheRepository } from "@/server/features/portfolio/PortfolioCacheRepository";
+import { ProjectRepository } from "@/server/features/projects/repositories/ProjectRepository";
+import {
+  buildTrendSummary,
+  pageMovers,
+  type PageMover,
+} from "@/server/features/portfolio/trendSummary";
 
 // Airspace fork: the cross-project portfolio, modelled on the Ahrefs
 // dashboard: per site, health + authority + link profile + tracked keyword
@@ -35,6 +43,11 @@ import { SITE_TYPES, type SiteType } from "@/types/schemas/projects";
 // metered DataForSEO refresh.
 
 const DAILY_ROW_LIMIT = 200;
+const PAGE_ROW_LIMIT = 500;
+// The page serves the stored copy while it is younger than this; the
+// scheduler re-computes it every PORTFOLIO_REFRESH_MS so a visit rarely waits.
+const PORTFOLIO_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+const PORTFOLIO_REFRESH_MS = 60 * 60 * 1000;
 // Links shown inline on a site card; the count covers the whole stored set.
 const NEW_LINKS_SHOWN = 3;
 // Health model, named so tuning is one edit and reviewable.
@@ -47,6 +60,10 @@ const HEALTH_INFO_PENALTY = 1;
 const HEALTH_EXTRA_TYPE_PENALTY = 2;
 const HEALTH_FLOOR = 5;
 
+function toPages(rows: { keys?: string[]; clicks: number }[]) {
+  return rows.map((row) => ({ page: row.keys?.[0] ?? "", clicks: row.clicks }));
+}
+
 function toSiteType(value: string): SiteType {
   return SITE_TYPES.find((candidate) => candidate === value) ?? "standard";
 }
@@ -57,6 +74,8 @@ type GscSummary =
       totals: ReturnType<typeof sumSearchTotals>;
       prevTotals: ReturnType<typeof sumSearchTotals>;
       daily: { date: string; clicks: number }[];
+      gained: PageMover | null;
+      lost: PageMover | null;
     }
   | { connected: false; errored?: boolean };
 
@@ -68,7 +87,7 @@ async function getGscSummary(projectId: string): Promise<GscSummary> {
   });
   const prev = previousPeriod(startDate, endDate);
   try {
-    const [current, previous] = await Promise.all([
+    const [current, previous, currentPages, previousPages] = await Promise.all([
       GscService.getPerformance({
         projectId,
         startDate,
@@ -85,7 +104,27 @@ async function getGscSummary(projectId: string): Promise<GscSummary> {
         filters: [],
         rowLimit: DAILY_ROW_LIMIT,
       }),
+      GscService.getPerformance({
+        projectId,
+        startDate,
+        endDate,
+        dimensions: ["page"],
+        filters: [],
+        rowLimit: PAGE_ROW_LIMIT,
+      }),
+      GscService.getPerformance({
+        projectId,
+        startDate: prev.startDate,
+        endDate: prev.endDate,
+        dimensions: ["page"],
+        filters: [],
+        rowLimit: PAGE_ROW_LIMIT,
+      }),
     ]);
+    const movers = pageMovers(
+      toPages(currentPages.rows),
+      toPages(previousPages.rows),
+    );
     const daily = sort(
       current.rows
         .map((row) => ({ date: row.keys?.[0] ?? "", clicks: row.clicks }))
@@ -97,6 +136,8 @@ async function getGscSummary(projectId: string): Promise<GscSummary> {
       totals: sumSearchTotals(current.rows),
       prevTotals: sumSearchTotals(previous.rows),
       daily,
+      gained: movers.gained,
+      lost: movers.lost,
     };
   } catch (error) {
     if (
@@ -151,7 +192,7 @@ async function getPortfolioRow(project: {
   siteType: string;
 }) {
   const siteType = toSiteType(project.siteType);
-  const [overview, gscConnection, snapshots, gsc, recentLinks] =
+  const [overview, gscConnection, snapshots, gsc, recentLinks, authority] =
     await Promise.all([
       EstateSnapshotService.getOverview({
         projectId: project.id,
@@ -165,6 +206,7 @@ async function getPortfolioRow(project: {
       BacklinkRecentLinkRepository.listForProject(project.id, {
         domain: project.domain,
       }),
+      AuthorityService.getAuthority(project.id, project.domain),
     ]);
   const newCleanLinks = selectNewCleanLinks(recentLinks);
   const recommendations = buildRecommendations({
@@ -173,6 +215,22 @@ async function getPortfolioRow(project: {
     audit: overview.audit,
     backlinks: overview.backlinks,
     gscConnected: gscConnection !== null,
+  });
+  const trend = buildTrendSummary({
+    gsc: gsc.connected
+      ? {
+          connected: true,
+          clicks: gsc.totals.clicks,
+          prevClicks: gsc.prevTotals.clicks,
+          impressions: gsc.totals.impressions,
+          prevImpressions: gsc.prevTotals.impressions,
+          gained: gsc.gained,
+          lost: gsc.lost,
+        }
+      : { connected: false },
+    authority,
+    newCleanLinks: newCleanLinks.length,
+    topAction: recommendations[0]?.title ?? null,
   });
   const hasAnyData = Boolean(
     overview.rank || overview.audit || overview.backlinks || gscConnection,
@@ -195,6 +253,8 @@ async function getPortfolioRow(project: {
       referringDomains: snapshot.referringDomains,
     })),
     recommendations,
+    authority,
+    trend,
     newLinks: {
       // Null until the first daily snapshot has stored links.
       tracked: recentLinks.length > 0,
@@ -234,6 +294,14 @@ async function getPortfolio(organizationId: string) {
           gsc: { connected: false as const, errored: true },
           refdomainHistory: [],
           recommendations: [] as Recommendation[],
+          authority: { ahrefsDr: null, dataforseoRank: null },
+          trend: {
+            direction: "nodata" as const,
+            headline: "Failed to load",
+            state: "This site's data failed to load.",
+            driver: "",
+            todo: "Refresh to retry.",
+          },
           newLinks: {
             tracked: false,
             cleanCount: 0,
@@ -298,4 +366,81 @@ async function getProjectRecommendations(project: {
   });
 }
 
-export const PortfolioService = { getPortfolio, getProjectRecommendations };
+export type PortfolioRowData = Awaited<ReturnType<typeof getPortfolio>>[number];
+export type CachedPortfolio = {
+  rows: PortfolioRowData[];
+  computedAt: string;
+  fromCache: boolean;
+};
+
+async function computeAndStore(organizationId: string): Promise<CachedPortfolio> {
+  const rows = await getPortfolio(organizationId);
+  const computedAt = new Date().toISOString();
+  // A copy with a failed site is still worth serving, but never stored as the
+  // "fresh" copy for six hours: the next scheduler tick retries it.
+  const storedAt = rows.some((row) => row.loadError)
+    ? new Date(Date.now() - PORTFOLIO_MAX_AGE_MS).toISOString()
+    : computedAt;
+  await PortfolioCacheRepository.put(
+    organizationId,
+    JSON.stringify(rows),
+    storedAt,
+  );
+  return { rows, computedAt, fromCache: false };
+}
+
+/** The portfolio from the stored copy when it is fresh enough, otherwise
+ * computed now and stored. `force` always recomputes (the Refresh button). */
+async function getPortfolioCached(
+  organizationId: string,
+  options: { force?: boolean } = {},
+): Promise<CachedPortfolio> {
+  if (!options.force) {
+    const cached = await PortfolioCacheRepository.get(organizationId);
+    if (
+      cached &&
+      Date.now() - Date.parse(cached.computedAt) < PORTFOLIO_MAX_AGE_MS
+    ) {
+      try {
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- payload is our own serialised getPortfolio output
+        const rows = JSON.parse(cached.payload) as PortfolioRowData[];
+        return { rows, computedAt: cached.computedAt, fromCache: true };
+      } catch {
+        // A corrupt copy falls through to a recompute.
+      }
+    }
+  }
+  return computeAndStore(organizationId);
+}
+
+/** Scheduler: keep every organization's stored portfolio under an hour old. */
+async function refreshPortfolioCaches(): Promise<{ refreshed: number }> {
+  const projects = await ProjectRepository.listActiveWithDomain();
+  const organizations = [...new Set(projects.map((p) => p.organizationId))];
+  let refreshed = 0;
+  for (const organizationId of organizations) {
+    const cached = await PortfolioCacheRepository.get(organizationId);
+    if (
+      cached &&
+      Date.now() - Date.parse(cached.computedAt) < PORTFOLIO_REFRESH_MS
+    ) {
+      continue;
+    }
+    await computeAndStore(organizationId);
+    refreshed += 1;
+  }
+  return { refreshed };
+}
+
+/** Drop the stored copy after a change that reshapes it (site type). */
+async function invalidate(organizationId: string) {
+  await PortfolioCacheRepository.clear(organizationId);
+}
+
+export const PortfolioService = {
+  getPortfolio,
+  getPortfolioCached,
+  refreshPortfolioCaches,
+  invalidate,
+  getProjectRecommendations,
+};

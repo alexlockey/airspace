@@ -127,6 +127,7 @@ import { whoamiTool } from "@/server/mcp/tools/whoami";
 import {
   bindGoogleServiceAccountTool,
   getPortfolioTool,
+  recordDomainRatingsTool,
 } from "@/server/mcp/tools/airspace-estate-tools";
 import { explorePromptTool } from "@/server/mcp/tools/explore-prompt";
 import { registerWidgetResource } from "@/server/mcp/widget-resource";
@@ -403,6 +404,7 @@ export function createOpenSeoMcpServer(
   // this server only, not in the shared list the Every App gateway publishes.
   register(getPortfolioTool);
   register(bindGoogleServiceAccountTool);
+  register(recordDomainRatingsTool);
 
   return server;
 }

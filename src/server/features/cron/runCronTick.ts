@@ -3,6 +3,8 @@ import { reconcileStaleAudits } from "@/server/features/audit/services/auditReco
 import { sendFirstAuditEmails } from "@/server/features/audit/services/firstAuditEmails";
 import { refreshStaleBacklinkSnapshots } from "@/server/features/dashboard/services/dailySnapshotRefresh";
 import { ServiceAccountBindingService } from "@/server/features/google/ServiceAccountBindingService";
+import { AuthorityService } from "@/server/features/portfolio/AuthorityService";
+import { PortfolioService } from "@/server/features/portfolio/PortfolioService";
 import { runScheduledRankChecks } from "@/server/features/rank-tracking/services/scheduledRankChecks";
 
 // Airspace fork: the non-purge cron body, extracted so the Workers scheduled
@@ -44,6 +46,20 @@ export async function runCronTick(
     await withPgClient(() => ServiceAccountBindingService.bindIfDue());
   } catch (err) {
     console.error("[cron] Google service-account binding failed:", err);
+  }
+  // Airspace fork: monthly authority history (a couple of sites per tick,
+  // each at most every 28 days; kill switch AIRSPACE_AUTHORITY_HISTORY=off).
+  try {
+    await withPgClient(() => AuthorityService.refreshDueHistories(env));
+  } catch (err) {
+    console.error("[cron] Authority history refresh failed:", err);
+  }
+  // Airspace fork: keep the stored portfolio under an hour old so the page
+  // opens without waiting on Search Console.
+  try {
+    await withPgClient(() => PortfolioService.refreshPortfolioCaches());
+  } catch (err) {
+    console.error("[cron] Portfolio cache refresh failed:", err);
   }
   for (const result of checks)
     if (result.status === "rejected") throw result.reason;

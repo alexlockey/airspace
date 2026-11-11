@@ -26,6 +26,7 @@ import {
 } from "@/client/features/dashboard/DashboardCards";
 import { Ga4Card } from "@/client/features/dashboard/Ga4Card";
 import { RecommendedActionsCard } from "@/client/features/dashboard/RecommendedActionsCard";
+import { TrendSummaryCard } from "@/client/features/dashboard/TrendSummaryCard";
 import { WorkspaceMergeBanner } from "@/client/features/dashboard/WorkspaceMergeBanner";
 import { QueryError } from "@/client/components/QueryState";
 import {
@@ -157,7 +158,9 @@ export function DashboardPage({
           activation={activation}
         />
 
-        {/* Airspace fork: rule-based, evidence-cited actions for this site. */}
+        {/* Airspace fork: the site's trend in three lines, then rule-based,
+            evidence-cited actions. */}
+        <TrendSummaryCard projectId={projectId} />
         <RecommendedActionsCard projectId={projectId} />
 
         <Tabs

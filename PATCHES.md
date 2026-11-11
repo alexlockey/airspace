@@ -204,6 +204,30 @@ moved, so the next sync is mechanical:
 - Branding re-applied on the new shadcn sidebar, mobile bar, OAuth consent,
   entrypoint banner and MCP server identity (all via `BRAND`).
 
+## v1.9: proactive portfolio (11 Nov 2026)
+
+- Migration `0070_airspace_authority_and_cache` (pg `0048_...`): tables
+  `domain_authority_points` (project, source dataforseo_rank | ahrefs_dr,
+  date, value, referring domains; unique per project+source+date) and
+  `portfolio_cache` (one JSON payload per organization).
+- `AuthorityRepository`, `AuthorityService` (monthly DataForSEO
+  backlinks/history fetch, at most every 28 days per site, 2 sites per tick,
+  kill switch `AIRSPACE_AUTHORITY_HISTORY=off`; `recordDomainRatings` for Ahrefs
+  DR points), `authoritySummary.ts` (latest, 3m and 12m change, series).
+- `trendSummary.ts` (+ test): deterministic three lines per site (state,
+  driver, todo) and `pageMovers` (top gaining and losing page, jump links
+  folded). PortfolioService adds two page-dimension GSC calls per site.
+- Portfolio cache: `PortfolioService.getPortfolioCached` serves the stored
+  copy under 6h old, the cron tick recomputes copies older than 1h
+  (`refreshPortfolioCaches`), the page has a Refresh button (force), and a
+  site-type change or a DR recording invalidates the copy. A copy with a
+  failed site is stored as already stale so the next tick retries.
+- UI: `src/client/features/portfolio/{EstateGlance,NewLinksRow}.tsx` (estate
+  table worst news first, trend lines, authority label);
+  `TrendSummaryCard.tsx` on the project dashboard above Recommended actions.
+- MCP: `get_portfolio` takes `fresh`, returns `trend`, `authority`,
+  top gaining/losing page and `computedAt`; new `record_domain_ratings`.
+
 ## Deliberately NOT rebranded
 
 - `/ai` MCP setup page, help pages, plugin/skill directories, package name,

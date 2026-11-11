@@ -1,3 +1,4 @@
+import { PortfolioService } from "@/server/features/portfolio/PortfolioService";
 import { waitUntil } from "cloudflare:workers";
 import { DashboardFirstAuditService } from "@/server/features/dashboard/services/DashboardFirstAuditService";
 import { createServerFn } from "@tanstack/react-start";
@@ -107,9 +108,15 @@ export const saveOnboardingWebsite = createServerFn({ method: "POST" })
 export const setProjectSiteType = createServerFn({ method: "POST" })
   .middleware(requireProjectContext)
   .validator(setProjectSiteTypeSchema)
-  .handler(async ({ data, context }) =>
-    ProjectService.setProjectSiteType(context.organizationId, data),
-  );
+  .handler(async ({ data, context }) => {
+    const project = await ProjectService.setProjectSiteType(
+      context.organizationId,
+      data,
+    );
+    // The stored portfolio carries the old rubric's recommendations.
+    await PortfolioService.invalidate(context.organizationId);
+    return project;
+  });
 
 export const archiveProject = createServerFn({ method: "POST" })
   .middleware(requireProjectContext)

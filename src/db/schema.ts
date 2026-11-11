@@ -105,6 +105,8 @@ export const {
   dashboardStepDismissals,
   backlinkSnapshots,
   backlinkRecentLinks,
+  domainAuthorityPoints,
+  portfolioCache,
   dataRefreshClaims,
   crawlerCredentials,
   projectContextSections,

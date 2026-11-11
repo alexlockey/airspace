@@ -554,6 +554,43 @@ export const backlinkRecentLinks = sqliteTable(
   },
   (table) => [index("backlink_recent_links_project_idx").on(table.projectId)],
 );
+
+// Airspace fork: authority over time per site. One row per source per date:
+// DataForSEO domain rank (monthly, 0-100 scale) and Ahrefs Domain Rating
+// (points recorded when captured). Upserted, never deleted except by cascade.
+export const domainAuthorityPoints = sqliteTable(
+  "domain_authority_points",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    domain: text("domain").notNull(),
+    source: text("source", { enum: ["dataforseo_rank", "ahrefs_dr"] }).notNull(),
+    date: text("date").notNull(),
+    value: real("value").notNull(),
+    referringDomains: integer("referring_domains"),
+    capturedAt: text("captured_at")
+      .notNull()
+      .default(sql`(current_timestamp)`),
+  },
+  (table) => [
+    uniqueIndex("domain_authority_points_project_source_date_idx").on(
+      table.projectId,
+      table.source,
+      table.date,
+    ),
+  ],
+);
+
+// Airspace fork: the computed portfolio per organization, so the page opens
+// from a stored copy instead of fanning Search Console calls on every load.
+// Refreshed by the scheduler and by the page's Refresh button.
+export const portfolioCache = sqliteTable("portfolio_cache", {
+  organizationId: text("organization_id").primaryKey(),
+  payload: text("payload").notNull(),
+  computedAt: text("computed_at").notNull(),
+});
 // Personal checklist preferences; completion remains derived from product state.
 export const dashboardStepDismissals = sqliteTable(
   "dashboard_step_dismissals",

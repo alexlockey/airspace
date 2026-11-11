@@ -533,6 +533,37 @@ export const backlinkRecentLinks = pgTable(
   },
   (table) => [index("backlink_recent_links_project_idx").on(table.projectId)],
 );
+
+// Airspace fork: mirror of the SQLite domain_authority_points table.
+export const domainAuthorityPoints = pgTable(
+  "domain_authority_points",
+  {
+    id: serial("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    domain: text("domain").notNull(),
+    source: text("source", { enum: ["dataforseo_rank", "ahrefs_dr"] }).notNull(),
+    date: text("date").notNull(),
+    value: real("value").notNull(),
+    referringDomains: integer("referring_domains"),
+    capturedAt: timestampColumn("captured_at").notNull().default(isoNow),
+  },
+  (table) => [
+    uniqueIndex("domain_authority_points_project_source_date_idx").on(
+      table.projectId,
+      table.source,
+      table.date,
+    ),
+  ],
+);
+
+// Airspace fork: mirror of the SQLite portfolio_cache table.
+export const portfolioCache = pgTable("portfolio_cache", {
+  organizationId: text("organization_id").primaryKey(),
+  payload: text("payload").notNull(),
+  computedAt: timestampColumn("computed_at").notNull(),
+});
 // Personal checklist preferences; completion remains derived from product state.
 export const dashboardStepDismissals = pgTable(
   "dashboard_step_dismissals",

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { PortfolioService } from "@/server/features/portfolio/PortfolioService";
+import { AuthorityService } from "@/server/features/portfolio/AuthorityService";
 import { ServiceAccountBindingService } from "@/server/features/google/ServiceAccountBindingService";
 import { mcpResponse } from "@/server/mcp/formatters";
 import { type ToolContext } from "@/server/mcp/context";
@@ -11,6 +12,28 @@ import { buildDashboardUrl } from "@/server/mcp/urls";
 // doing"; bind_google_service_account re-runs the service-account binding.
 
 type PortfolioRows = Awaited<ReturnType<typeof PortfolioService.getPortfolio>>;
+type AuthorityRow = PortfolioRows[number]["authority"];
+
+function pickSeries(series: AuthorityRow["ahrefsDr"]) {
+  return series
+      ? {
+          latest: series.latest,
+          latestDate: series.latestDate,
+          change3m: series.change3m,
+          change3mFrom: series.change3mFrom,
+          change12m: series.change12m,
+          change12mFrom: series.change12mFrom,
+          series: series.series,
+        }
+    : null;
+}
+
+function compactAuthority(authority: AuthorityRow) {
+  return {
+    ahrefsDomainRating: pickSeries(authority.ahrefsDr),
+    dataforseoRank: pickSeries(authority.dataforseoRank),
+  };
+}
 type PortfolioRow = PortfolioRows[number];
 
 function pctChange(current: number, previous: number): number | null {
@@ -33,6 +56,8 @@ function compactRow(row: PortfolioRow, baseUrl: string) {
         ctr28d: row.gsc.totals.ctr,
         position28d: row.gsc.totals.position,
         dailyClicks: row.gsc.daily.map((d) => d.clicks),
+        topGainingPage: row.gsc.gained,
+        topLosingPage: row.gsc.lost,
       }
     : { connected: false, errored: Boolean(row.gsc.errored) };
   return {
@@ -76,6 +101,8 @@ function compactRow(row: PortfolioRow, baseUrl: string) {
         }
       : null,
     recommendations: row.recommendations,
+    trend: row.trend,
+    authority: compactAuthority(row.authority),
     url: buildDashboardUrl(baseUrl, `/p/${row.project.id}`),
   };
 }
@@ -95,7 +122,7 @@ function summaryLine(row: ReturnType<typeof compactRow>): string {
     ? `, +${row.newCleanLinks.count} new clean links`
     : "";
   const next = row.recommendations[0]?.title ?? "nothing flagged";
-  return `- ${row.name} (${row.domain ?? "no domain"}): ${row.severity}, health ${row.health ?? "-"}, ${gsc}${links}. Next: ${next}`;
+  return `- ${row.name} (${row.domain ?? "no domain"}): ${row.severity}, health ${row.health ?? "-"}, ${gsc}${links}. ${row.trend.driver} Next: ${next}`;
 }
 
 export const getPortfolioTool = {
@@ -103,8 +130,13 @@ export const getPortfolioTool = {
   config: {
     title: "Estate portfolio overview",
     description:
-      "Every project in one call: severity, health score, Search Console clicks and impressions (last 28 days vs the previous 28, daily series), backlink snapshot, new clean backlinks, rank-tracking movement, latest audit and recommended actions. Reads stored data and first-party Search Console only. Uses no credits. Use this first for 'how are my sites doing' or any estate-wide question.",
-    inputSchema: {} as Record<string, never>,
+      "Every project in one call: a plain three-line trend summary (direction, driver, next step), severity, health score, Search Console clicks and impressions (last 28 days vs the previous 28, daily series, top gaining and losing page), authority over time (Ahrefs Domain Rating points and DataForSEO monthly domain rank), backlink snapshot, new clean backlinks, rank-tracking movement, latest audit and recommended actions. Served from a copy recomputed hourly; pass fresh=true to recompute now (about 15 seconds). Uses no credits. Use this first for 'how are my sites doing' or any estate-wide question.",
+    inputSchema: {
+      fresh: z
+        .boolean()
+        .optional()
+        .describe("Recompute now instead of using the hourly copy."),
+    },
     outputSchema: z.looseObject({
       sites: z.array(z.looseObject({ projectId: z.string() })),
       ...optionalMetaOutputSchema,
@@ -115,14 +147,17 @@ export const getPortfolioTool = {
       destructiveHint: false,
     },
   },
-  handler: async (_args: Record<string, never>, context: ToolContext) => {
+  handler: async (args: { fresh?: boolean }, context: ToolContext) => {
     const { baseUrl, organizationId } = context.auth;
-    const rows = await PortfolioService.getPortfolio(organizationId);
-    const sites = rows.map((row) => compactRow(row, baseUrl));
+    const portfolio = await PortfolioService.getPortfolioCached(
+      organizationId,
+      { force: args.fresh === true },
+    );
+    const sites = portfolio.rows.map((row) => compactRow(row, baseUrl));
     return mcpResponse({
-      text: `Estate (${sites.length} sites):\n${sites.map(summaryLine).join("\n")}`,
+      text: `Estate (${sites.length} sites, computed ${portfolio.computedAt}):\n${sites.map(summaryLine).join("\n")}`,
       meta: { url: buildDashboardUrl(baseUrl, "/portfolio") },
-      structuredContent: { sites },
+      structuredContent: { sites, computedAt: portfolio.computedAt },
     });
   },
 };
@@ -161,5 +196,56 @@ export const bindGoogleServiceAccountTool = {
         ].filter(Boolean)
       : ["No service account configured (AIRSPACE_GOOGLE_SA_JSON_B64)."];
     return mcpResponse({ text: lines.join("\n"), structuredContent: report });
+  },
+};
+
+export const recordDomainRatingsTool = {
+  name: "record_domain_ratings",
+  config: {
+    title: "Record Ahrefs Domain Rating readings",
+    description:
+      "Stores Ahrefs Domain Rating readings (for example from Ahrefs' free domain-rating lookup) against the matching projects, so the portfolio shows Domain Rating and its change over time. One reading per domain per date; a repeat for the same date replaces it. Domains with no project are returned as unmatched. Uses no credits.",
+    inputSchema: {
+      readings: z
+        .array(
+          z.object({
+            domain: z.string().min(1),
+            domainRating: z.number().min(0).max(100),
+            date: z
+              .string()
+              .regex(/^\d{4}-\d{2}-\d{2}$/)
+              .describe("YYYY-MM-DD the reading was taken."),
+          }),
+        )
+        .min(1)
+        .max(100),
+    },
+    outputSchema: z.looseObject({
+      stored: z.array(z.string()),
+      unmatched: z.array(z.string()),
+      ...optionalMetaOutputSchema,
+    }),
+    annotations: {
+      readOnlyHint: false,
+      openWorldHint: false,
+      destructiveHint: false,
+    },
+  },
+  handler: async (
+    args: {
+      readings: { domain: string; domainRating: number; date: string }[];
+    },
+    context: ToolContext,
+  ) => {
+    const result = await AuthorityService.recordDomainRatings(
+      context.auth.organizationId,
+      args.readings,
+    );
+    // The portfolio copy should show the new points straight away.
+    await PortfolioService.invalidate(context.auth.organizationId);
+    return mcpResponse({
+      text: `Stored ${result.stored.length} reading(s): ${result.stored.join(", ") || "none"}. Unmatched: ${result.unmatched.join(", ") || "none"}.`,
+      structuredContent: result,
+    });
   },
 };
