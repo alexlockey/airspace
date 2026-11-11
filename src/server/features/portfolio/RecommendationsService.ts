@@ -1,8 +1,9 @@
+import { sort } from "remeda";
 import type {
-  DashboardAuditSummary,
   DashboardBacklinkSummary,
   DashboardRankSummary,
-} from "@/server/features/dashboard/services/DashboardService";
+  EstateAuditSummary,
+} from "@/server/features/portfolio/EstateSnapshotService";
 import { isIssueNeutralForSiteType } from "@/shared/siteTypeRules";
 import type { SiteType } from "@/types/schemas/projects";
 
@@ -37,7 +38,7 @@ export type PortfolioSeverity = "critical" | "warn" | "nodata" | "good";
 export function buildRecommendations(input: {
   siteType: SiteType;
   rank: DashboardRankSummary | null;
-  audit: DashboardAuditSummary | null;
+  audit: EstateAuditSummary | null;
   backlinks: DashboardBacklinkSummary | null;
   gscConnected: boolean;
   strikingDistance?: {
@@ -151,9 +152,10 @@ export function buildRecommendations(input: {
     });
   }
 
-  return recs
-    .toSorted((a, z) => a.priority - z.priority)
-    .slice(0, MAX_RECOMMENDATIONS);
+  return sort(recs, (a, z) => a.priority - z.priority).slice(
+    0,
+    MAX_RECOMMENDATIONS,
+  );
 }
 
 /** One severity per site, derived from the recommendations so chips, sort

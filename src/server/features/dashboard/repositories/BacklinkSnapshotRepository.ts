@@ -1,3 +1,4 @@
+import { reverse } from "remeda";
 import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { backlinkSnapshots } from "@/db/schema";
@@ -39,7 +40,7 @@ async function listRecentForProject(
     )
     .orderBy(desc(backlinkSnapshots.id))
     .limit(limit);
-  return rows.toReversed();
+  return reverse(rows);
 }
 
 async function insert(

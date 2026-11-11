@@ -1,3 +1,4 @@
+import { sort } from "remeda";
 import type { ReactNode } from "react";
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -34,7 +35,7 @@ function pctDelta(current: number, previous: number): string | null {
 }
 
 function healthClass(health: number | null) {
-  if (health === null) return "text-base-content/40";
+  if (health === null) return "text-muted-foreground";
   if (health >= 80) return "text-status-good";
   if (health >= 55) return "text-status-warn";
   return "text-status-critical";
@@ -53,7 +54,7 @@ function Stat({
 }) {
   return (
     <div className="min-w-0">
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-base-content/40">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
         {label}
       </div>
       <div
@@ -177,13 +178,13 @@ function NewLinksRow({ row }: { row: PortfolioRow }) {
   const domain = row.project.domain;
   if (!newLinks.tracked || !domain) {
     return (
-      <div className="mt-3 text-xs text-base-content/30">
+      <div className="mt-3 text-xs text-muted-foreground/70">
         New links appear after the first daily snapshot.
       </div>
     );
   }
   return (
-    <div className="mt-3 rounded-md border border-base-300/60 px-3 py-2">
+    <div className="mt-3 rounded-md border border-border/60 px-3 py-2">
       <div className="flex items-center justify-between gap-2">
         <span
           className={
@@ -225,12 +226,12 @@ function NewLinksRow({ row }: { row: PortfolioRow }) {
                 title={link.urlFrom}
               >
                 <span className="truncate">{link.domainFrom}</span>
-                <ExternalLink className="size-3 shrink-0 text-base-content/40" />
+                <ExternalLink className="size-3 shrink-0 text-muted-foreground" />
               </a>
-              <span className="truncate text-base-content/50">
+              <span className="truncate text-muted-foreground">
                 {link.urlTo ? `→ ${shortPath(link.urlTo)}` : ""}
               </span>
-              <span className="ml-auto shrink-0 tabular-nums text-base-content/40">
+              <span className="ml-auto shrink-0 tabular-nums text-muted-foreground">
                 {link.isDofollow === false ? "nofollow · " : ""}
                 spam {link.spamScore} · {daysAgo(link.firstSeen)}
               </span>
@@ -264,7 +265,7 @@ function SiteCard({ row }: { row: PortfolioRow }) {
 
   return (
     <div
-      className={`rounded-lg border border-base-300 bg-base-100 p-4 ${tint}`}
+      className={`rounded-lg border border-border bg-card p-4 ${tint}`}
     >
       <div className="flex items-start justify-between gap-2">
         <Link
@@ -282,7 +283,7 @@ function SiteCard({ row }: { row: PortfolioRow }) {
               </span>
             ) : null}
           </div>
-          <div className="truncate text-xs text-base-content/50">
+          <div className="truncate text-xs text-muted-foreground">
             {row.project.domain ?? "No domain set"}
           </div>
         </Link>
@@ -300,7 +301,7 @@ function SiteCard({ row }: { row: PortfolioRow }) {
 
           <div className="mt-3 flex items-end gap-4">
             <div className="min-w-0 flex-1">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-base-content/40">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 GSC clicks, daily 28d
               </div>
               {gsc && gsc.daily.length >= 2 ? (
@@ -309,13 +310,13 @@ function SiteCard({ row }: { row: PortfolioRow }) {
                   className="mt-1 h-9 w-full text-primary"
                 />
               ) : (
-                <div className="mt-1 flex h-9 items-center text-xs text-base-content/30">
+                <div className="mt-1 flex h-9 items-center text-xs text-muted-foreground/70">
                   {gscEmptyLabel}
                 </div>
               )}
             </div>
             <div className="w-28 shrink-0">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-base-content/40">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Ref domains
               </div>
               {refSpark.length >= 2 ? (
@@ -324,7 +325,7 @@ function SiteCard({ row }: { row: PortfolioRow }) {
                   className="mt-1 h-9 w-full text-status-info"
                 />
               ) : (
-                <div className="mt-1 flex h-9 items-center text-xs text-base-content/30">
+                <div className="mt-1 flex h-9 items-center text-xs text-muted-foreground/70">
                   history builds daily
                 </div>
               )}
@@ -337,7 +338,7 @@ function SiteCard({ row }: { row: PortfolioRow }) {
             <Link
               to="/p/$projectId"
               params={{ projectId: row.project.id }}
-              className="mt-3 block rounded-md bg-base-200/60 px-3 py-2 text-xs hover:bg-base-200"
+              className="mt-3 block rounded-md bg-muted/60 px-3 py-2 text-xs hover:bg-muted"
               title={topRec.evidence}
             >
               <span
@@ -346,14 +347,14 @@ function SiteCard({ row }: { row: PortfolioRow }) {
                     ? "font-semibold text-status-critical"
                     : topRec.priority === 2
                       ? "font-semibold text-status-warn"
-                      : "font-semibold text-base-content/60"
+                      : "font-semibold text-muted-foreground"
                 }
               >
                 Next:
               </span>{" "}
               {topRec.title}
               {row.recommendations.length > 1 ? (
-                <span className="text-base-content/40">
+                <span className="text-muted-foreground">
                   {" "}
                   · +{row.recommendations.length - 1} more
                 </span>
@@ -372,19 +373,20 @@ function PortfolioPage() {
     queryFn: () => getPortfolioOverview(),
   });
 
-  const rows = (portfolioQuery.data ?? []).toSorted(
+  const rows = sort(
+    portfolioQuery.data ?? [],
     (a, z) => severityOrder[a.severity] - severityOrder[z.severity],
   );
 
   return (
-    <div className="h-full overflow-auto bg-base-100 px-4 py-8 pb-24 md:px-6 md:py-12 md:pb-8">
+    <div className="h-full overflow-auto bg-background px-4 py-8 pb-24 md:px-6 md:py-12 md:pb-8">
       <div className="mx-auto w-full max-w-7xl space-y-6">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
             <Radar className="size-6 text-status-critical" />
             Portfolio
           </h1>
-          <p className="mt-1 text-sm text-base-content/60">
+          <p className="mt-1 text-sm text-muted-foreground">
             Every tracked site, worst first: health, real GSC clicks, link
             profile, tracked movement and the next action. Colours carry
             meaning: red act, amber review, green healthy.
@@ -393,10 +395,10 @@ function PortfolioPage() {
 
         {portfolioQuery.isLoading ? (
           <div className="flex justify-center py-10">
-            <span className="loading loading-spinner loading-md" />
+            <span className="inline-block animate-spin rounded-full border-2 border-current border-t-transparent size-6" />
           </div>
         ) : portfolioQuery.isError ? (
-          <div className="alert alert-error">
+          <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
             <span>
               The portfolio failed to load. Refresh to retry; if it persists,
               check /api/health.
@@ -410,7 +412,7 @@ function PortfolioPage() {
           </div>
         )}
 
-        <p className="text-xs text-base-content/40">
+        <p className="text-xs text-muted-foreground">
           Stored snapshots plus free Search Console data; snapshots refresh
           daily (and on a project dashboard visit). Backlink deltas are the
           provider's reporting period; clicks compare the previous 28 days.

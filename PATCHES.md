@@ -13,7 +13,7 @@ mechanical: after `git merge upstream/main`, re-check each item below.
   `DashboardService.getOverview` + GSC connection status across all projects.
   Reads stored snapshots only; deliberately never calls
   `ensureBacklinkSnapshot` (metered).
-- `public/favicon.svg` - Airspace radar mark.
+- `src/public/favicon.svg` - Airspace radar mark (upstream moved public/ under src/).
 - `PATCHES.md` - this file.
 - `src/routes/api/selfhost-cron.ts` - secret-guarded endpoint driving
   scheduled rank checks + stale-audit watchdog (Cloudflare cron does not
@@ -34,7 +34,7 @@ mechanical: after `git merge upstream/main`, re-check each item below.
 | `src/client/navigation/items.ts`                          | `Radar` icon import; `portfolioNavItem` + exported `estateNavGroup`.                                                                                                          |
 | `src/client/features/auth/AuthPage.tsx`                   | logo img -> /favicon.svg, alt "Airspace".                                                                                                                                     |
 | `public/site.webmanifest`                                 | name/short_name "Airspace", theme colours #1E1B2E.                                                                                                                            |
-| `docker-entrypoint.sh`                                    | startup banner names the fork.                                                                                                                                                |
+| `deploy/docker/docker-entrypoint.sh`                      | startup banner names the fork.                                                                                                                                                |
 | `src/client/components/table/TablePagination.tsx`         | optional `unitLabel` prop so grouped totals are labelled truthfully.                                                                                                          |
 | `src/client/features/backlinks/BacklinksPageSections.tsx` | presets + disavow buttons wired in; reconciling links-from-domains line; mode-dependent pagination unit.                                                                      |
 | `src/client/features/backlinks/BacklinksPageContent.tsx`  | passes overview summary to the results card.                                                                                                                                  |
@@ -147,6 +147,62 @@ mechanical: after `git merge upstream/main`, re-check each item below.
 - MCP: `get_portfolio` (free estate overview from PortfolioService, used by
   the Airspace Weekly runner) and `bind_google_service_account`, in
   `src/server/mcp/tools/airspace-estate-tools.ts`, registered in server.ts.
+
+## v1.8: upstream sync (11 Nov 2026, upstream 46b815be)
+
+569 upstream commits merged (fork point c469a48a, 23 Aug). 38 conflicts. What
+moved, so the next sync is mechanical:
+
+- Migrations live in `drizzle/sqlite` and `drizzle/pg` now. The fork's two
+  schema changes (projects.site_type, backlink_recent_links) are ONE migration
+  after upstream's: `drizzle/sqlite/0069_airspace_fork_tables.sql` and
+  `drizzle/pg/0047_airspace_fork_tables.sql`. The old 0043_clammy_bromley and
+  0044_talented_swordsman files are gone. A database that already ran them
+  (the droplet) must get a `d1_migrations` row for
+  `0069_airspace_fork_tables.sql` BEFORE the new image starts, or the migrate
+  step fails on the duplicate column. Next sync: if upstream has passed 0069,
+  regenerate ours as the new last number and repeat the row insert.
+- Upstream #872 removed the stored backlink snapshot and rank summary from
+  `DashboardService` and deleted `BacklinkSnapshotRepository`. Both are
+  fork-owned now: `BacklinkSnapshotRepository.ts` kept as is, and
+  `src/server/features/portfolio/EstateSnapshotService.ts` holds getOverview
+  (rank + upstream audit summary + totalIssueTypes + backlinks),
+  getRankSummary, getBacklinkSummary, ensureBacklinkSnapshot and
+  refreshRecentLinks. `DashboardService.ts` is byte-identical to upstream.
+  PortfolioService, RecommendationsService and dailySnapshotRefresh import
+  the new service.
+- Upstream ported the UI from daisyUI to shadcn/Tailwind tokens. Fork UI
+  ported: portfolio.tsx, RecommendedActionsCard, DisavowExportButton use
+  bg-card / bg-muted / border-border / text-muted-foreground. The
+  `BacklinksFilterPresets` component is REMOVED: upstream's Best links menu
+  (hide spam) covers the Clean links preset; the Spam review view is the
+  backlinks filter panel with spam score >= 30. DisavowExportButton sits in
+  upstream's new toolbar beside the actions menu. The Recommended actions
+  card sits above upstream's dashboard tabs.
+- `runCronTick` mirrors upstream's scheduled body (watchdog, then rank
+  checks, AI visibility and first-audit emails side by side) plus the fork's
+  snapshot refresh and service-account binding. server.ts calls it.
+- Upstream's single-container image (now `deploy/docker/Dockerfile`, entrypoint
+  `deploy/docker/docker-entrypoint.sh`) runs its own five-minute scheduler
+  (`scripts/selfhost-scheduler.mjs`) against the Workers scheduled handler.
+  The droplet crontab POST to /api/selfhost-cron is therefore redundant and is
+  removed at cutover; the route stays for on-demand ticks.
+- Google: upstream moved token minting to `getGoogleAccessToken` plus a
+  gateway mode. The service-account branch sits in `getToken` (GSC) and
+  `getGa4AccessToken` (GA4), and both `authenticated` helpers skip gateway
+  mode for the sentinel account.
+- MCP: `get_portfolio` and `bind_google_service_account` are registered in
+  `createMcpServer` after `registerOpenSeoTools`, NOT inside it, so the Every
+  App gateway catalog test (fixed tool count) stays upstream's. Output schemas
+  use `z.looseObject` (upstream contract test).
+- Upstream lib target is below ES2023 while lint demands non-mutating sorts:
+  use remeda `sort`/`reverse`, never `toSorted`/`toReversed`.
+- Site type: upstream replaced setProjectDomain/setProjectMarket with
+  setProjectWebsite; `setProjectSiteType` (schema, repository, service, server
+  fn) and the Site type select are re-added on top. KeywordSuggestionService
+  test fixture gains `siteType`.
+- Branding re-applied on the new shadcn sidebar, mobile bar, OAuth consent,
+  entrypoint banner and MCP server identity (all via `BRAND`).
 
 ## Deliberately NOT rebranded
 

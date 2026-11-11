@@ -1,15 +1,15 @@
 import type {
   ArchiveProjectInput,
   CreateProjectInput,
-  RestoreProjectInput,
-  SetProjectDomainInput,
-  SetProjectMarketInput,
+  ArchivedProjectInput,
   SetProjectSiteTypeInput,
+  SetProjectWebsiteInput,
   UpdateProjectInput,
 } from "@/types/schemas/projects";
 import { SITE_TYPES, type SiteType } from "@/types/schemas/projects";
 import { ProjectRepository } from "@/server/features/projects/repositories/ProjectRepository";
 import { normalizeBacklinksTarget } from "@/server/lib/dataforseoBacklinksTarget";
+import { isUniqueViolation } from "@/db/isUniqueViolation";
 import { AppError } from "@/server/lib/errors";
 import { assertLanguageForLocation } from "@/server/lib/market";
 import { getLanguageCode } from "@/shared/keyword-locations";
@@ -17,6 +17,7 @@ import { getLanguageCode } from "@/shared/keyword-locations";
 function mapProject(project: {
   id: string;
   name: string;
+  brandName: string | null;
   domain: string | null;
   locationCode: number;
   languageCode: string;
@@ -29,6 +30,7 @@ function mapProject(project: {
   return {
     id: project.id,
     name: project.name,
+    brandName: project.brandName,
     domain: project.domain,
     // Default market for the project's data calls (MCP tools and the web UI
     // fall back to these when a call omits locationCode/languageCode).
@@ -65,12 +67,7 @@ function isReservedDefaultConflict(
   error: unknown,
   input: { name: string; domain?: string },
 ) {
-  return (
-    input.name === "Default" &&
-    !input.domain &&
-    error instanceof Error &&
-    error.message.includes("UNIQUE constraint failed")
-  );
+  return input.name === "Default" && !input.domain && isUniqueViolation(error);
 }
 
 const RESERVED_DEFAULT_MESSAGE =
@@ -142,6 +139,7 @@ export async function updateProject(
       organizationId,
       {
         name: input.name,
+        brandName: input.brandName,
         domain: normalizeProjectDomain(input.domain),
         market: resolveMarketInput(input),
       },
@@ -153,58 +151,6 @@ export async function updateProject(
     }
     throw error;
   }
-}
-
-/**
- * Sets a project's domain on its own, for the dashboard hero's inline input.
- * Writing just this column keeps the write from echoing a name/market the
- * caller never edited.
- */
-export async function setProjectDomain(
-  organizationId: string,
-  input: SetProjectDomainInput,
-) {
-  const domain = normalizeProjectDomain(input.domain);
-  if (domain === undefined) {
-    throw new AppError("VALIDATION_ERROR", "Enter a valid domain.");
-  }
-  const row = await ProjectRepository.updateProjectDomain(
-    input.projectId,
-    organizationId,
-    domain,
-  );
-  return mapProject(row);
-}
-
-/**
- * Sets a project's default market on its own, for surfaces that only ask for
- * the market (onboarding). Writing just these two columns keeps the write from
- * echoing a name/domain the caller never edited.
- */
-export async function setProjectMarket(
-  organizationId: string,
-  input: SetProjectMarketInput,
-) {
-  assertLanguageForLocation(input.locationCode, input.languageCode);
-  const row = await ProjectRepository.updateProjectMarket(
-    input.projectId,
-    organizationId,
-    { locationCode: input.locationCode, languageCode: input.languageCode },
-  );
-  return mapProject(row);
-}
-
-// Airspace fork: writes only the site_type column.
-export async function setProjectSiteType(
-  organizationId: string,
-  input: SetProjectSiteTypeInput,
-) {
-  const row = await ProjectRepository.updateProjectSiteType(
-    input.projectId,
-    organizationId,
-    input.siteType,
-  );
-  return mapProject(row);
 }
 
 export async function archiveProject(
@@ -227,7 +173,7 @@ export async function listArchivedProjects(organizationId: string) {
 
 export async function restoreProject(
   organizationId: string,
-  input: RestoreProjectInput,
+  input: ArchivedProjectInput,
 ) {
   try {
     await ProjectRepository.restoreProject(
@@ -238,10 +184,7 @@ export async function restoreProject(
     // The Default singleton index is the only unique index on projects, and
     // restore only writes archived_at — so a UNIQUE failure can only mean an
     // active Default/no-domain project already exists.
-    if (
-      error instanceof Error &&
-      error.message.includes("UNIQUE constraint failed")
-    ) {
+    if (isUniqueViolation(error)) {
       throw new AppError(
         "CONFLICT",
         'An active project named "Default" with no domain already exists. Rename it first, then restore this one.',
@@ -265,4 +208,41 @@ export async function getProjectForOrganization(
   }
 
   return mapProject(project);
+}
+
+/** The organization a live project belongs to, without scoping to one. Only
+ *  for picking which of the caller's organizations to open; access to the
+ *  project itself is still checked against that organization. */
+export async function getProjectOrganizationId(projectId: string) {
+  const project = await ProjectRepository.getProjectById(projectId);
+  return project?.organizationId ?? null;
+}
+
+export async function setProjectWebsite(
+  organizationId: string,
+  input: SetProjectWebsiteInput,
+) {
+  const domain = normalizeProjectDomain(input.domain);
+  if (!domain) throw new AppError("VALIDATION_ERROR", "Enter a valid domain.");
+  assertLanguageForLocation(input.locationCode, input.languageCode);
+  const row = await ProjectRepository.updateProjectWebsite(
+    input.projectId,
+    organizationId,
+    domain,
+    { locationCode: input.locationCode, languageCode: input.languageCode },
+  );
+  return mapProject(row);
+}
+
+// Airspace fork: writes only the site_type column.
+export async function setProjectSiteType(
+  organizationId: string,
+  input: SetProjectSiteTypeInput,
+) {
+  const row = await ProjectRepository.updateProjectSiteType(
+    input.projectId,
+    organizationId,
+    input.siteType,
+  );
+  return mapProject(row);
 }

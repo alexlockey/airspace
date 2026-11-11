@@ -1,3 +1,4 @@
+import { sort } from "remeda";
 import { FileDown } from "lucide-react";
 import { downloadFile } from "@/client/lib/download";
 import type {
@@ -40,7 +41,7 @@ export function DisavowExportButton({
             ? [row.domainFrom]
             : [],
         );
-  const domains = [...new Set(candidates)].toSorted();
+  const domains = sort([...new Set(candidates)], (a, z) => a.localeCompare(z));
   const loadedRows =
     activeTab === "domains"
       ? tabRows.referringDomains.length
@@ -80,7 +81,7 @@ export function DisavowExportButton({
   return (
     <button
       type="button"
-      className="btn btn-ghost btn-sm gap-1.5"
+      className="inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-sm font-medium hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
       disabled={domains.length === 0}
       title={
         domains.length === 0
@@ -95,7 +96,7 @@ export function DisavowExportButton({
       Disavow file
       {domains.length > 0 ? (
         <span
-          className={`badge badge-xs border-0 ${isPartial ? "badge-warning text-warning-content" : "badge-error text-error-content"}`}
+          className={`inline-flex items-center rounded px-1.5 text-[10px] font-medium ${isPartial ? "bg-amber-500/15 text-amber-700 dark:text-amber-300" : "bg-destructive/15 text-destructive"}`}
         >
           {domains.length}
           {isPartial ? "…" : ""}

@@ -105,10 +105,10 @@ export const getPortfolioTool = {
     description:
       "Every project in one call: severity, health score, Search Console clicks and impressions (last 28 days vs the previous 28, daily series), backlink snapshot, new clean backlinks, rank-tracking movement, latest audit and recommended actions. Reads stored data and first-party Search Console only. Uses no credits. Use this first for 'how are my sites doing' or any estate-wide question.",
     inputSchema: {} as Record<string, never>,
-    outputSchema: {
-      sites: z.array(z.object({ projectId: z.string() }).passthrough()),
+    outputSchema: z.looseObject({
+      sites: z.array(z.looseObject({ projectId: z.string() })),
       ...optionalMetaOutputSchema,
-    },
+    }),
     annotations: {
       readOnlyHint: true,
       openWorldHint: false,
@@ -134,13 +134,13 @@ export const bindGoogleServiceAccountTool = {
     description:
       "Connects every project to the Search Console site and Google Analytics property the configured service account can see, matched by domain. Runs automatically every six hours; call it after granting the service account access to a new property. Uses no credits.",
     inputSchema: {} as Record<string, never>,
-    outputSchema: {
+    outputSchema: z.looseObject({
       configured: z.boolean(),
       serviceAccountEmail: z.string().nullable(),
-      gsc: z.object({}).passthrough(),
-      ga4: z.object({}).passthrough(),
+      gsc: z.looseObject({}),
+      ga4: z.looseObject({}),
       ...optionalMetaOutputSchema,
-    },
+    }),
     annotations: {
       readOnlyHint: false,
       openWorldHint: true,

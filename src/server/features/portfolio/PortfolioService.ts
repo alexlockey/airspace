@@ -1,4 +1,5 @@
-import { DashboardService } from "@/server/features/dashboard/services/DashboardService";
+import { sort } from "remeda";
+import { EstateSnapshotService } from "@/server/features/portfolio/EstateSnapshotService";
 import { BacklinkRecentLinkRepository } from "@/server/features/dashboard/repositories/BacklinkRecentLinkRepository";
 import { BacklinkSnapshotRepository } from "@/server/features/dashboard/repositories/BacklinkSnapshotRepository";
 import {
@@ -85,10 +86,12 @@ async function getGscSummary(projectId: string): Promise<GscSummary> {
         rowLimit: DAILY_ROW_LIMIT,
       }),
     ]);
-    const daily = current.rows
-      .map((row) => ({ date: row.keys?.[0] ?? "", clicks: row.clicks }))
-      .filter((row) => row.date)
-      .toSorted((a, z) => a.date.localeCompare(z.date));
+    const daily = sort(
+      current.rows
+        .map((row) => ({ date: row.keys?.[0] ?? "", clicks: row.clicks }))
+        .filter((row) => row.date),
+      (a, z) => a.date.localeCompare(z.date),
+    );
     return {
       connected: true as const,
       totals: sumSearchTotals(current.rows),
@@ -113,7 +116,7 @@ async function getGscSummary(projectId: string): Promise<GscSummary> {
  * reinterpretation applies before scoring. Null when no COMPLETED audit
  * exists (a running crawl's partial counts would skew the share maths). */
 function healthScore(
-  audit: Awaited<ReturnType<typeof DashboardService.getOverview>>["audit"],
+  audit: Awaited<ReturnType<typeof EstateSnapshotService.getOverview>>["audit"],
   siteType: SiteType,
 ): number | null {
   if (!audit || audit.status !== "completed" || audit.pagesCrawled === 0) {
@@ -150,7 +153,7 @@ async function getPortfolioRow(project: {
   const siteType = toSiteType(project.siteType);
   const [overview, gscConnection, snapshots, gsc, recentLinks] =
     await Promise.all([
-      DashboardService.getOverview({
+      EstateSnapshotService.getOverview({
         projectId: project.id,
         domain: project.domain,
       }),
@@ -252,7 +255,7 @@ async function getProjectRecommendations(project: {
   siteType: string;
 }) {
   const [overview, gscConnection] = await Promise.all([
-    DashboardService.getOverview({
+    EstateSnapshotService.getOverview({
       projectId: project.id,
       domain: project.domain,
     }),

@@ -1,3 +1,4 @@
+import { sort } from "remeda";
 import { describe, expect, it } from "vitest";
 import {
   buildRecommendations,
@@ -20,8 +21,14 @@ function auditWith(
   }[],
 ) {
   return {
+    id: "audit-1",
     status: "completed" as const,
     pagesCrawled: 100,
+    pagesTotal: 100,
+    currentPhase: null,
+    lighthouseCompleted: 0,
+    lighthouseFailed: 0,
+    lighthouseTotal: 0,
     startedAt: "2026-09-01T00:00:00Z",
     topIssues: issues,
     totalIssueTypes: issues.length,
@@ -81,7 +88,7 @@ describe("buildRecommendations", () => {
     expect(recs.length).toBeLessThanOrEqual(6);
     expect(recs[0]?.priority).toBe(1);
     const priorities = recs.map((rec) => rec.priority);
-    expect(priorities.toSorted((a, z) => a - z)).toEqual(priorities);
+    expect(sort(priorities, (a, z) => a - z)).toEqual(priorities);
   });
 });
 

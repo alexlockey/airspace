@@ -1,4 +1,4 @@
-import { DashboardService } from "@/server/features/dashboard/services/DashboardService";
+import { EstateSnapshotService } from "@/server/features/portfolio/EstateSnapshotService";
 import { ProjectRepository } from "@/server/features/projects/repositories/ProjectRepository";
 import { getEnvValueSync } from "@/server/lib/runtime-env";
 
@@ -31,7 +31,7 @@ export async function refreshStaleBacklinkSnapshots(env: object): Promise<{
       projectId: project.id,
     };
     try {
-      const before = await DashboardService.getOverview({
+      const before = await EstateSnapshotService.getOverview({
         projectId: project.id,
         domain: project.domain,
       });
@@ -40,7 +40,7 @@ export async function refreshStaleBacklinkSnapshots(env: object): Promise<{
       // "self-heal" re-paid for the same empty rows call on every tick
       // (~$7/day, Oct 2026). Links refresh with the next daily snapshot.
       if (before.backlinks && !before.backlinks.stale) continue;
-      await DashboardService.ensureBacklinkSnapshot({
+      await EstateSnapshotService.ensureBacklinkSnapshot({
         projectId: project.id,
         domain: project.domain,
         billingCustomer,

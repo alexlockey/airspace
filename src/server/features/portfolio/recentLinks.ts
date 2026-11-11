@@ -1,3 +1,4 @@
+import { sort } from "remeda";
 import {
   CLEAN_LINK_MAX_SPAM_SCORE,
   NEW_LINK_WINDOW_DAYS,
@@ -46,7 +47,8 @@ export function selectNewCleanLinks(
   now: Date = new Date(),
 ): NewCleanLink[] {
   const cutoffMs = now.getTime() - NEW_LINK_WINDOW_DAYS * DAY_MS;
-  return links
-    .filter((link) => isNewCleanLink(link, cutoffMs))
-    .toSorted((a, z) => Date.parse(z.firstSeen) - Date.parse(a.firstSeen));
+  return sort(
+    links.filter((link) => isNewCleanLink(link, cutoffMs)),
+    (a, z) => Date.parse(z.firstSeen) - Date.parse(a.firstSeen),
+  );
 }

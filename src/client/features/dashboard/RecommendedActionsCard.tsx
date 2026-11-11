@@ -81,14 +81,14 @@ export function RecommendedActionsCard({ projectId }: { projectId: string }) {
   const recs = recsQuery.data ?? [];
 
   return (
-    <section className="rounded-lg border border-base-300 bg-base-100 p-4">
+    <section className="rounded-lg border border-border bg-card p-4">
       <div className="flex items-center gap-2">
-        <ListChecks className="size-4 text-base-content/60" />
+        <ListChecks className="size-4 text-muted-foreground" />
         <h2 className="font-semibold">Recommended actions</h2>
       </div>
       {recsQuery.isLoading ? (
         <div className="flex justify-center py-6">
-          <span className="loading loading-spinner loading-sm" />
+          <span className="inline-block animate-spin rounded-full border-2 border-current border-t-transparent size-4" />
         </div>
       ) : recsQuery.isError ? (
         <p className="mt-2 text-sm text-status-critical">
@@ -96,7 +96,7 @@ export function RecommendedActionsCard({ projectId }: { projectId: string }) {
           clear until this loads.
         </p>
       ) : recs.length === 0 ? (
-        <p className="mt-2 text-sm text-base-content/50">
+        <p className="mt-2 text-sm text-muted-foreground">
           Nothing needs attention. New findings appear here as audits, rank
           checks and Search Console data come in.
         </p>
@@ -107,7 +107,7 @@ export function RecommendedActionsCard({ projectId }: { projectId: string }) {
               <RecLink
                 rec={rec}
                 projectId={projectId}
-                className="flex items-start gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-base-200/60"
+                className="flex items-start gap-2 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted/60"
               >
                 <span
                   className={`${PRIORITY_CHIP[rec.priority]} mt-0.5 shrink-0`}
@@ -116,7 +116,7 @@ export function RecommendedActionsCard({ projectId }: { projectId: string }) {
                 </span>
                 <span className="min-w-0">
                   <span className="block font-medium">{rec.title}</span>
-                  <span className="block text-xs text-base-content/50">
+                  <span className="block text-xs text-muted-foreground">
                     {rec.evidence}
                   </span>
                 </span>

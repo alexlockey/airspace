@@ -1,1 +1,0 @@
-ALTER TABLE `projects` ADD `site_type` text DEFAULT 'standard' NOT NULL;
