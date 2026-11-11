@@ -1,4 +1,4 @@
-import { PortfolioService } from "@/server/features/portfolio/PortfolioService";
+import { PortfolioCacheService } from "@/server/features/portfolio/PortfolioCacheService";
 import { waitUntil } from "cloudflare:workers";
 import { DashboardFirstAuditService } from "@/server/features/dashboard/services/DashboardFirstAuditService";
 import { createServerFn } from "@tanstack/react-start";
@@ -114,7 +114,7 @@ export const setProjectSiteType = createServerFn({ method: "POST" })
       data,
     );
     // The stored portfolio carries the old rubric's recommendations.
-    await PortfolioService.invalidate(context.organizationId);
+    await PortfolioCacheService.invalidate(context.organizationId);
     return project;
   });
 

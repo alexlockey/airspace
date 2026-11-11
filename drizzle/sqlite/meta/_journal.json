@@ -498,6 +498,13 @@
       "when": 1794394005763,
       "tag": "0070_airspace_authority_and_cache",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "6",
+      "when": 1794394852521,
+      "tag": "0071_airspace_portfolio_cache_fk",
+      "breakpoints": true
     }
   ]
 }

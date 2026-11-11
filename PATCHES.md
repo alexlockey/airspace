@@ -228,6 +228,15 @@ moved, so the next sync is mechanical:
 - MCP: `get_portfolio` takes `fresh`, returns `trend`, `authority`,
   top gaining/losing page and `computedAt`; new `record_domain_ratings`.
 
+- v1.9.1: caching moved to `PortfolioCacheService.ts`; the stored copy is
+  re-validated against a fingerprint of the live project list (id, name,
+  domain, site type) so archive, restore, delete, rename and domain changes
+  recompute it without edits to upstream server functions. `portfolio_cache`
+  references `organization` with cascade (migration 0071 rebuilds the table
+  WITHOUT copying rows: D1 keeps foreign keys on in migrations and the copy is
+  disposable). Trend movers name pages on other hosts (shop.) and sum job-board
+  adverts per section.
+
 ## Deliberately NOT rebranded
 
 - `/ai` MCP setup page, help pages, plugin/skill directories, package name,

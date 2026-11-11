@@ -28,8 +28,6 @@ import {
 import { isIssueNeutralForSiteType } from "@/shared/siteTypeRules";
 import { SITE_TYPES, type SiteType } from "@/types/schemas/projects";
 import { AuthorityService } from "@/server/features/portfolio/AuthorityService";
-import { PortfolioCacheRepository } from "@/server/features/portfolio/PortfolioCacheRepository";
-import { ProjectRepository } from "@/server/features/projects/repositories/ProjectRepository";
 import {
   buildTrendSummary,
   pageMovers,
@@ -44,10 +42,6 @@ import {
 
 const DAILY_ROW_LIMIT = 200;
 const PAGE_ROW_LIMIT = 500;
-// The page serves the stored copy while it is younger than this; the
-// scheduler re-computes it every PORTFOLIO_REFRESH_MS so a visit rarely waits.
-const PORTFOLIO_MAX_AGE_MS = 6 * 60 * 60 * 1000;
-const PORTFOLIO_REFRESH_MS = 60 * 60 * 1000;
 // Links shown inline on a site card; the count covers the whole stored set.
 const NEW_LINKS_SHOWN = 3;
 // Health model, named so tuning is one edit and reviewable.
@@ -79,7 +73,10 @@ type GscSummary =
     }
   | { connected: false; errored?: boolean };
 
-async function getGscSummary(projectId: string): Promise<GscSummary> {
+async function getGscSummary(
+  projectId: string,
+  siteType: SiteType,
+): Promise<GscSummary> {
   // Same window policy as the Search Performance page (resolveDateRange owns
   // the GSC data-lag handling) so the two surfaces always reconcile.
   const { startDate, endDate } = resolveDateRange({
@@ -124,6 +121,7 @@ async function getGscSummary(projectId: string): Promise<GscSummary> {
     const movers = pageMovers(
       toPages(currentPages.rows),
       toPages(previousPages.rows),
+      { bySection: siteType === "job_board" },
     );
     const daily = sort(
       current.rows
@@ -202,7 +200,7 @@ async function getPortfolioRow(project: {
       BacklinkSnapshotRepository.listRecentForProject(project.id, {
         domain: project.domain,
       }),
-      getGscSummary(project.id),
+      getGscSummary(project.id, siteType),
       BacklinkRecentLinkRepository.listForProject(project.id, {
         domain: project.domain,
       }),
@@ -217,6 +215,7 @@ async function getPortfolioRow(project: {
     gscConnected: gscConnection !== null,
   });
   const trend = buildTrendSummary({
+    domain: project.domain,
     gsc: gsc.connected
       ? {
           connected: true,
@@ -367,80 +366,5 @@ async function getProjectRecommendations(project: {
 }
 
 export type PortfolioRowData = Awaited<ReturnType<typeof getPortfolio>>[number];
-export type CachedPortfolio = {
-  rows: PortfolioRowData[];
-  computedAt: string;
-  fromCache: boolean;
-};
 
-async function computeAndStore(organizationId: string): Promise<CachedPortfolio> {
-  const rows = await getPortfolio(organizationId);
-  const computedAt = new Date().toISOString();
-  // A copy with a failed site is still worth serving, but never stored as the
-  // "fresh" copy for six hours: the next scheduler tick retries it.
-  const storedAt = rows.some((row) => row.loadError)
-    ? new Date(Date.now() - PORTFOLIO_MAX_AGE_MS).toISOString()
-    : computedAt;
-  await PortfolioCacheRepository.put(
-    organizationId,
-    JSON.stringify(rows),
-    storedAt,
-  );
-  return { rows, computedAt, fromCache: false };
-}
-
-/** The portfolio from the stored copy when it is fresh enough, otherwise
- * computed now and stored. `force` always recomputes (the Refresh button). */
-async function getPortfolioCached(
-  organizationId: string,
-  options: { force?: boolean } = {},
-): Promise<CachedPortfolio> {
-  if (!options.force) {
-    const cached = await PortfolioCacheRepository.get(organizationId);
-    if (
-      cached &&
-      Date.now() - Date.parse(cached.computedAt) < PORTFOLIO_MAX_AGE_MS
-    ) {
-      try {
-        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- payload is our own serialised getPortfolio output
-        const rows = JSON.parse(cached.payload) as PortfolioRowData[];
-        return { rows, computedAt: cached.computedAt, fromCache: true };
-      } catch {
-        // A corrupt copy falls through to a recompute.
-      }
-    }
-  }
-  return computeAndStore(organizationId);
-}
-
-/** Scheduler: keep every organization's stored portfolio under an hour old. */
-async function refreshPortfolioCaches(): Promise<{ refreshed: number }> {
-  const projects = await ProjectRepository.listActiveWithDomain();
-  const organizations = [...new Set(projects.map((p) => p.organizationId))];
-  let refreshed = 0;
-  for (const organizationId of organizations) {
-    const cached = await PortfolioCacheRepository.get(organizationId);
-    if (
-      cached &&
-      Date.now() - Date.parse(cached.computedAt) < PORTFOLIO_REFRESH_MS
-    ) {
-      continue;
-    }
-    await computeAndStore(organizationId);
-    refreshed += 1;
-  }
-  return { refreshed };
-}
-
-/** Drop the stored copy after a change that reshapes it (site type). */
-async function invalidate(organizationId: string) {
-  await PortfolioCacheRepository.clear(organizationId);
-}
-
-export const PortfolioService = {
-  getPortfolio,
-  getPortfolioCached,
-  refreshPortfolioCaches,
-  invalidate,
-  getProjectRecommendations,
-};
+export const PortfolioService = { getPortfolio, getProjectRecommendations };

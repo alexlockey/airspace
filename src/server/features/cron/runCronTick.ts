@@ -4,7 +4,7 @@ import { sendFirstAuditEmails } from "@/server/features/audit/services/firstAudi
 import { refreshStaleBacklinkSnapshots } from "@/server/features/dashboard/services/dailySnapshotRefresh";
 import { ServiceAccountBindingService } from "@/server/features/google/ServiceAccountBindingService";
 import { AuthorityService } from "@/server/features/portfolio/AuthorityService";
-import { PortfolioService } from "@/server/features/portfolio/PortfolioService";
+import { PortfolioCacheService } from "@/server/features/portfolio/PortfolioCacheService";
 import { runScheduledRankChecks } from "@/server/features/rank-tracking/services/scheduledRankChecks";
 
 // Airspace fork: the non-purge cron body, extracted so the Workers scheduled
@@ -57,7 +57,7 @@ export async function runCronTick(
   // Airspace fork: keep the stored portfolio under an hour old so the page
   // opens without waiting on Search Console.
   try {
-    await withPgClient(() => PortfolioService.refreshPortfolioCaches());
+    await withPgClient(() => PortfolioCacheService.refreshPortfolioCaches());
   } catch (err) {
     console.error("[cron] Portfolio cache refresh failed:", err);
   }

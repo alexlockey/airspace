@@ -587,7 +587,9 @@ export const domainAuthorityPoints = sqliteTable(
 // from a stored copy instead of fanning Search Console calls on every load.
 // Refreshed by the scheduler and by the page's Refresh button.
 export const portfolioCache = sqliteTable("portfolio_cache", {
-  organizationId: text("organization_id").primaryKey(),
+  organizationId: text("organization_id")
+    .primaryKey()
+    .references(() => organization.id, { onDelete: "cascade" }),
   payload: text("payload").notNull(),
   computedAt: text("computed_at").notNull(),
 });

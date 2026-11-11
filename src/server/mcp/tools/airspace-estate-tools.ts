@@ -1,5 +1,6 @@
+import { PortfolioCacheService } from "@/server/features/portfolio/PortfolioCacheService";
 import { z } from "zod";
-import { PortfolioService } from "@/server/features/portfolio/PortfolioService";
+import type { PortfolioService } from "@/server/features/portfolio/PortfolioService";
 import { AuthorityService } from "@/server/features/portfolio/AuthorityService";
 import { ServiceAccountBindingService } from "@/server/features/google/ServiceAccountBindingService";
 import { mcpResponse } from "@/server/mcp/formatters";
@@ -149,7 +150,7 @@ export const getPortfolioTool = {
   },
   handler: async (args: { fresh?: boolean }, context: ToolContext) => {
     const { baseUrl, organizationId } = context.auth;
-    const portfolio = await PortfolioService.getPortfolioCached(
+    const portfolio = await PortfolioCacheService.getPortfolioCached(
       organizationId,
       { force: args.fresh === true },
     );
@@ -242,7 +243,7 @@ export const recordDomainRatingsTool = {
       args.readings,
     );
     // The portfolio copy should show the new points straight away.
-    await PortfolioService.invalidate(context.auth.organizationId);
+    await PortfolioCacheService.invalidate(context.auth.organizationId);
     return mcpResponse({
       text: `Stored ${result.stored.length} reading(s): ${result.stored.join(", ") || "none"}. Unmatched: ${result.unmatched.join(", ") || "none"}.`,
       structuredContent: result,

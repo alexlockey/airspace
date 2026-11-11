@@ -82,7 +82,47 @@ describe("buildTrendSummary", () => {
   });
 });
 
+describe("page labels", () => {
+  it("names a page on another host instead of calling both the home page", () => {
+    const summary = buildTrendSummary({
+      domain: "grantsbakery.co.uk",
+      gsc: {
+        connected: true,
+        clicks: 2452,
+        prevClicks: 2599,
+        impressions: 10,
+        prevImpressions: 10,
+        gained: { page: "https://www.grantsbakery.co.uk/", clicks: 900, delta: 38 },
+        lost: { page: "https://shop.grantsbakery.co.uk/", clicks: 100, delta: -71 },
+      },
+      authority: noAuthority,
+      newCleanLinks: 0,
+      topAction: null,
+    });
+    expect(summary.driver).toContain("Biggest gain the home page (+38 clicks)");
+    expect(summary.driver).toContain("biggest drop shop.grantsbakery.co.uk home page (-71)");
+  });
+});
+
 describe("pageMovers", () => {
+  it("sums job-board adverts per section", () => {
+    const movers = pageMovers(
+      [
+        { page: "https://b.com/jobs/1-a", clicks: 10 },
+        { page: "https://b.com/jobs/2-b", clicks: 5 },
+        { page: "https://b.com/blog/x", clicks: 50 },
+      ],
+      [
+        { page: "https://b.com/jobs/1-a", clicks: 400 },
+        { page: "https://b.com/jobs/3-c", clicks: 100 },
+        { page: "https://b.com/blog/x", clicks: 40 },
+      ],
+      { bySection: true },
+    );
+    expect(movers.lost).toEqual({ page: "https://b.com/jobs/", clicks: 15, delta: -485, section: true });
+    expect(movers.gained?.page).toBe("https://b.com/blog/");
+  });
+
   it("folds jump links into their page and picks the top gain and drop", () => {
     const movers = pageMovers(
       [

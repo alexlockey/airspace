@@ -560,7 +560,9 @@ export const domainAuthorityPoints = pgTable(
 
 // Airspace fork: mirror of the SQLite portfolio_cache table.
 export const portfolioCache = pgTable("portfolio_cache", {
-  organizationId: text("organization_id").primaryKey(),
+  organizationId: text("organization_id")
+    .primaryKey()
+    .references(() => organization.id, { onDelete: "cascade" }),
   payload: text("payload").notNull(),
   computedAt: timestampColumn("computed_at").notNull(),
 });

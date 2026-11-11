@@ -8,9 +8,17 @@ import type {
 // glance: where it is heading and by how much, what drove it, what to do.
 // Deterministic (no model call), so it costs nothing and loads instantly.
 
-export type PageMover = { page: string; clicks: number; delta: number };
+export type PageMover = {
+  page: string;
+  clicks: number;
+  delta: number;
+  /** True when the mover is a whole section (job boards). */
+  section?: boolean;
+};
 
 export type TrendInput = {
+  /** The project's domain, so pages on another host (shop.) are named. */
+  domain?: string | null;
   gsc:
     | {
         connected: true;
@@ -70,10 +78,22 @@ function movement(label: string, change: number | null) {
   return `${label} ${change > 0 ? "up" : "down"} ${Math.abs(change)}%`;
 }
 
-export function shortPage(url: string) {
+function bareHost(host: string) {
+  return host.toLowerCase().replace(/^www\./, "");
+}
+
+/** A path on the site's own host, or host plus path on any other host. */
+export function shortPage(url: string, domain?: string | null) {
   try {
     const parsed = new URL(url);
-    return parsed.pathname === "/" ? "the home page" : parsed.pathname;
+    const sameHost =
+      !domain || bareHost(parsed.hostname) === bareHost(domain);
+    if (parsed.pathname === "/") {
+      return sameHost ? "the home page" : `${bareHost(parsed.hostname)} home page`;
+    }
+    return sameHost
+      ? parsed.pathname
+      : `${bareHost(parsed.hostname)}${parsed.pathname}`;
   } catch {
     return url;
   }
@@ -134,15 +154,17 @@ export function buildTrendSummary(input: TrendInput): TrendSummary {
       state += " Too few clicks to judge on clicks alone, so the verdict uses impressions.";
     }
     const movers: string[] = [];
+    const label = (mover: PageMover) =>
+      mover.section
+        ? `${shortPage(mover.page, input.domain)} pages`
+        : shortPage(mover.page, input.domain);
     if (g.gained && g.gained.delta >= MIN_MOVER_CLICKS) {
       movers.push(
-        `biggest gain ${shortPage(g.gained.page)} (${signed(g.gained.delta)} clicks)`,
+        `biggest gain ${label(g.gained)} (${signed(g.gained.delta)} clicks)`,
       );
     }
     if (g.lost && g.lost.delta <= -MIN_MOVER_CLICKS) {
-      movers.push(
-        `biggest drop ${shortPage(g.lost.page)} (${signed(g.lost.delta)})`,
-      );
+      movers.push(`biggest drop ${label(g.lost)} (${signed(g.lost.delta)})`);
     }
     if (movers.length > 0) parts.push(movers.join("; "));
   }
@@ -172,10 +194,28 @@ export function buildTrendSummary(input: TrendInput): TrendSummary {
   return { direction, headline, state, driver, todo };
 }
 
-function foldFragments(rows: { page: string; clicks: number }[]) {
+/** Job boards churn thousands of advert URLs; one advert's clicks say nothing,
+ * so their movers are summed per section ("/jobs/ pages"). */
+function sectionOf(url: string) {
+  try {
+    const parsed = new URL(url);
+    const first = parsed.pathname.split("/").filter(Boolean)[0];
+    return first
+      ? `${parsed.protocol}//${parsed.host}/${first}/`
+      : `${parsed.protocol}//${parsed.host}/`;
+  } catch {
+    return url;
+  }
+}
+
+function foldFragments(
+  rows: { page: string; clicks: number }[],
+  bySection: boolean,
+) {
   const map = new Map<string, number>();
   for (const row of rows) {
-    const page = row.page.split("#", 1)[0] ?? row.page;
+    const whole = row.page.split("#", 1)[0] ?? row.page;
+    const page = bySection ? sectionOf(whole) : whole;
     map.set(page, (map.get(page) ?? 0) + row.clicks);
   }
   return map;
@@ -186,14 +226,17 @@ function foldFragments(rows: { page: string; clicks: number }[]) {
 export function pageMovers(
   current: { page: string; clicks: number }[],
   previous: { page: string; clicks: number }[],
+  options: { bySection?: boolean } = {},
 ): { gained: PageMover | null; lost: PageMover | null } {
-  const cur = foldFragments(current);
-  const prev = foldFragments(previous);
+  const bySection = options.bySection === true;
+  const cur = foldFragments(current, bySection);
+  const prev = foldFragments(previous, bySection);
   const pages = new Set([...cur.keys(), ...prev.keys()]);
   const deltas = [...pages].map((page) => ({
     page,
     clicks: cur.get(page) ?? 0,
     delta: (cur.get(page) ?? 0) - (prev.get(page) ?? 0),
+    ...(bySection ? { section: true } : {}),
   }));
   const ordered = sort(deltas, (a, z) => z.delta - a.delta);
   const top = ordered[0];

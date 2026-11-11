@@ -1,3 +1,4 @@
+import { PortfolioCacheService } from "@/server/features/portfolio/PortfolioCacheService";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { PortfolioService } from "@/server/features/portfolio/PortfolioService";
@@ -15,7 +16,7 @@ export const getPortfolioOverview = createServerFn({ method: "POST" })
   .middleware(requireAuthenticatedContext)
   .validator(z.object({ force: z.boolean().optional() }).optional())
   .handler(async ({ context, data }) =>
-    PortfolioService.getPortfolioCached(context.organizationId, {
+    PortfolioCacheService.getPortfolioCached(context.organizationId, {
       force: data?.force === true,
     }),
   );
@@ -26,7 +27,7 @@ export const getProjectTrend = createServerFn({ method: "POST" })
   .middleware(requireProjectContext)
   .validator(z.object({ projectId: z.string().min(1) }))
   .handler(async ({ context }) => {
-    const portfolio = await PortfolioService.getPortfolioCached(
+    const portfolio = await PortfolioCacheService.getPortfolioCached(
       context.organizationId,
     );
     const row = portfolio.rows.find(
